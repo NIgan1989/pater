@@ -1,0 +1,180 @@
+name: pater
+description: "Мобильное приложение для краткосрочной аренды жилья с интегрированной системой клининговых услуг."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.0
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.2
+
+  # UI
+  flutter_svg: ^2.0.7
+  cached_network_image: ^3.2.3
+  shimmer: ^3.0.0
+  flutter_rating_bar: ^4.0.1
+  fl_chart: ^0.70.2
+  pin_code_fields: ^8.0.1
+  mask_text_input_formatter: ^2.9.0
+  
+  # Архитектура и управление состоянием
+  flutter_bloc: ^9.1.0
+  equatable: ^2.0.5
+  get_it: ^8.0.3
+  
+  # Сеть и хранение данных
+  dio: ^5.4.0
+  shared_preferences: ^2.5.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  
+  # Авторизация и уведомления
+  firebase_core: ^3.12.1
+  firebase_auth: ^5.5.1
+  firebase_messaging: ^15.2.4
+  firebase_analytics: ^11.4.4
+  cloud_firestore: ^5.6.5
+  
+  # Карты и геолокация
+  # google_maps_flutter: ^2.5.3
+  geolocator: ^13.0.3
+  geocoding: ^3.0.0
+  
+  # Роутинг
+  go_router: ^14.8.1
+  
+  # Интернационализация
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.19.0
+  
+  # Утилиты
+  url_launcher: ^6.3.1
+  image_picker: ^1.1.2
+  intl_phone_number_input: ^0.7.3+1
+  flutter_dotenv: ^5.1.0
+  connectivity_plus: ^6.1.3
+  google_sign_in: ^6.3.0
+  table_calendar: ^3.0.9
+  bcrypt: ^1.1.3
+  firebase_storage: ^12.4.4
+  js: ^0.6.7
+  
+  # Шрифты (используем локальные вместо Google Fonts)
+  # google_fonts: ^6.2.1
+
+  # New dependencies
+  share_plus: ^10.1.4
+  http: ^1.1.0
+  flutter_secure_storage: ^9.0.0
+  provider: ^6.0.5
+  collection: ^1.17.1
+  syncfusion_flutter_datepicker: ^28.2.12
+  flutter_form_builder: ^10.0.1
+  form_builder_validators: ^11.1.2
+  # google_maps_cluster_manager: ^3.1.0
+  flutter_cache_manager: ^3.4.1
+
+  # Добавляем бесплатные карты OpenStreetMap
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+  flutter_map_marker_cluster: ^1.3.2
+  flutter_lints: ^5.0.0
+  uuid: ^4.5.1
+  universal_html: ^2.2.4
+  flutter_map_cancellable_tile_provider: ^2.0.0
+  # Добавляем пакет для кэширования тайлов карты
+  flutter_map_tile_caching: ^9.0.0-dev.5
+
+  # Cloudinary
+  cloudinary_public: ^0.21.0
+
+  # Added from the code block
+  http_parser: ^4.0.2
+
+  # Added from the code block
+  flutter_riverpod: ^2.5.1
+  crypto: ^3.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  build_runner: ^2.4.8
+  hive_generator: ^2.0.1
+  flutter_launcher_icons: ^0.14.3
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section, like this:
+  assets:
+    - assets/images/avatars/
+    - assets/images/logo/
+    - assets/images/payment/
+    # - images/a_dot_ham.jpeg
+    - assets/icons/
+    - assets/fonts/
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <!-- Настройки безопасности для веб-приложения -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' https://www.gstatic.com/ https://www.google.com/ https://*.googleapis.com/ https://accounts.google.com/ 'unsafe-inline' 'unsafe-eval'; frame-src 'self' https://www.google.com/ https://www.gstatic.com/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com/; font-src 'self' data: https://fonts.gstatic.com/; img-src 'self' data: https://*.googleapis.com/ https://*.gstatic.com/ https://*.google.com/ https://images.unsplash.com/ https://*.cloudinary.com/ https://res.cloudinary.com/; connect-src 'self' https://*.googleapis.com/ https://*.google.com/ https://*.firebaseio.com/ https://*.cloudfunctions.net/ wss://*.firebaseio.com/ https://fonts.gstatic.com/ https://images.unsplash.com/ https://*.cloudinary.com/ https://res.cloudinary.com/ https://api.mapbox.com/ https://tile.openstreetmap.org/ https://*.tile.openstreetmap.org/">
+
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Pater - ваш персональный помощник">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="pater">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png" />
+
+  <!-- Загружаем Firebase SDK (единый блок) -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-messaging-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.2/firebase-analytics-compat.js"></script>
+
+  <!-- Увеличиваем таймауты для fetch -->
+  <script>
+    // Переопределяем fetch для увеличения таймаута
+    const originalFetch = window.fetch;
+    window.fetch = function () {
+      const timeout = 30000; // 30 секунд
+      const controller = new AbortController();
+      const signal = controller.signal;
+
+      // Устанавливаем таймаут
+      const timer = setTimeout(() => controller.abort(), timeout);
+
+      // Добавляем signal к опциям, если это объект опций
+      const args = Array.from(arguments);
+      if (args.length > 1 && typeof args[1] === 'object') {
+        args[1].signal = signal;
+      } else if (args.length === 1) {
+        args.push({ signal });
+      }
+
+      // Вызываем оригинальный fetch с новыми аргументами
+      return originalFetch.apply(window, args)
+        .finally(() => clearTimeout(timer));
+    };
+
+    // Добавляем глобальную переменную для отслеживания готовности Firebase
+    window.firebaseReady = false;
+  </script>
+
+  <title>Pater</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script>
+    // The value below is injected by flutter build, do not touch.
+    const serviceWorkerVersion = "{{flutter_service_worker_version}}";
+  </script>
+  <!-- This script adds the flutter initialization JS code -->
+  <script src="flutter.js" defer></script>
+
+  <!-- Подключаем наш скрипт диагностики Firebase -->
+  <script src="firebase_check.js" defer></script>
+</head>
+
+<body>
+  <!-- Индикатор загрузки -->
+  <div id="loading" style="
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #f8f9fa;
+    transition: opacity .5s ease-out;
+  ">
+    <div style="
+      width: 80px;
+      height: 80px;
+      border-radius: 10px;
+      background-color: #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    ">
+      <div class="lds-ring" style="
+        display: inline-block;
+        position: relative;
+        width: 40px;
+        height: 40px;
+      ">
+        <div style="
+          box-sizing: border-box;
+          display: block;
+          position: absolute;
+          width: 32px;
+          height: 32px;
+          margin: 4px;
+          border: 4px solid #4C6FFF;
+          border-radius: 50%;
+          animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+          border-color: #4C6FFF transparent transparent transparent;
+        "></div>
+        <div style="
+          box-sizing: border-box;
+          display: block;
+          position: absolute;
+          width: 32px;
+          height: 32px;
+          margin: 4px;
+          border: 4px solid #4C6FFF;
+          border-radius: 50%;
+          animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+          border-color: #4C6FFF transparent transparent transparent;
+          animation-delay: -0.45s;
+        "></div>
+        <div style="
+          box-sizing: border-box;
+          display: block;
+          position: absolute;
+          width: 32px;
+          height: 32px;
+          margin: 4px;
+          border: 4px solid #4C6FFF;
+          border-radius: 50%;
+          animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+          border-color: #4C6FFF transparent transparent transparent;
+          animation-delay: -0.3s;
+        "></div>
+        <div style="
+          box-sizing: border-box;
+          display: block;
+          position: absolute;
+          width: 32px;
+          height: 32px;
+          margin: 4px;
+          border: 4px solid #4C6FFF;
+          border-radius: 50%;
+          animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+          border-color: #4C6FFF transparent transparent transparent;
+          animation-delay: -0.15s;
+        "></div>
+      </div>
+      <div style="
+        margin-top: 8px;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        color: #4C6FFF;
+      ">Загрузка...</div>
+    </div>
+  </div>
+
+  <style>
+    #loading.fade {
+      opacity: 0;
+    }
+
+    @keyframes lds-ring {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+
+  <script>
+    // Безопасная обертка для всех вызовов Firebase
+    window.SafeFirebase = {
+      // Безопасное выполнение действий с Firebase
+      safeCall: function (func) {
+        try {
+          return func();
+        } catch (e) {
+          console.error("Ошибка при выполнении Firebase операции:", e);
+          return null;
+        }
+      },
+
+      // Безопасный доступ к Firestore
+      firestore: function () {
+        return this.safeCall(() => firebase.firestore());
+      }
+    };
+
+    // Firebase конфигурация
+    var firebaseConfig = {
+      apiKey: "AIzaSyC_6Y2zQ4qFGkLsAnAMG-zxKWM6dq2rGz8",
+      authDomain: "pater-bd6bb.firebaseapp.com",
+      projectId: "pater-bd6bb",
+      storageBucket: "pater-bd6bb.appspot.com",
+      messagingSenderId: "649524165115",
+      appId: "1:649524165115:web:e5b75ef599f52352c8c2e5",
+      measurementId: "G-WL91YBVP2V"
+    };
+
+    // Флаг, указывающий, были ли настройки Firestore уже установлены
+    window._firestoreSettingsApplied = false;
+
+    // Функция для инициализации настроек Firestore
+    function initFirestoreSettings() {
+      if (window._firestoreSettingsApplied) {
+        console.log("Настройки Firestore уже были применены");
+        return;
+      }
+
+      try {
+        if (firebase && firebase.firestore) {
+          firebase.firestore().settings({
+            experimentalForceLongPolling: true,
+            cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+            ignoreUndefinedProperties: true,
+            merge: true
+          });
+          window._firestoreSettingsApplied = true;
+          console.log("Firestore настроен с оптимизированными параметрами");
+        }
+      } catch (e) {
+        console.error("Ошибка при настройке Firestore:", e);
+      }
+    }
+
+    // Инициализация Firebase
+    try {
+      // Проверяем, не был ли Firebase уже инициализирован
+      if (!firebase.apps.length) {
+        // Инициализируем Firebase
+        firebase.initializeApp(firebaseConfig);
+        console.log("Firebase инициализирован");
+      } else {
+        console.log("Firebase уже был инициализирован ранее");
+      }
+
+      // Удаляю настройку reCAPTCHA для Firebase Auth
+      firebase.auth().settings.appVerificationDisabledForTesting = true;
+
+      // Сразу устанавливаем настройки Firestore
+      initFirestoreSettings();
+
+      // Обработка потери соединения
+      window.addEventListener('offline', function () {
+        console.log('Обнаружена потеря соединения');
+        SafeFirebase.safeCall(() => {
+          if (firebase.firestore) {
+            firebase.firestore().disableNetwork()
+              .then(function () {
+                console.log('Сеть Firestore отключена из-за потери соединения');
+              })
+              .catch(function (err) {
+                console.error('Ошибка при отключении сети:', err);
+              });
+          }
+        });
+      });
+
+      // Обработка восстановления соединения
+      window.addEventListener('online', function () {
+        console.log('Соединение восстановлено');
+        SafeFirebase.safeCall(() => {
+          if (firebase.firestore) {
+            firebase.firestore().enableNetwork()
+              .then(function () {
+                console.log('Сеть Firestore снова включена');
+              })
+              .catch(function (err) {
+                console.error('Ошибка при включении сети:', err);
+              });
+          }
+        });
+      });
+
+      // Устанавливаем флаг готовности Firebase
+      window.firebaseReady = true;
+
+    } catch (e) {
+      console.error("Ошибка инициализации Firebase: ", e);
+      window.firebaseReady = false;
+    }
+  </script>
+
+  <!-- Добавляем функцию для исправления проблем с соединением -->
+  <script>
+    // Глобальная функция для исправления проблем с CORS
+    window.fixCorsIssues = function () {
+      console.log('Запуск процедуры исправления проблем соединения');
+
+      // Проверяем, что Firebase доступен
+      if (typeof firebase === 'undefined' || !firebase.app) {
+        console.error('Firebase недоступен, невозможно исправить проблемы соединения');
+        return false;
+      }
+
+      try {
+        // Перезапускаем всю сеть Firestore - ТОЛЬКО управление сетью, без изменения настроек
+        if (firebase.firestore) {
+          firebase.firestore().disableNetwork()
+            .then(function () {
+              console.log('Сеть отключена для сброса');
+              setTimeout(function () {
+                firebase.firestore().enableNetwork()
+                  .then(function () {
+                    console.log('Сеть перезапущена');
+                  })
+                  .catch(function (error) {
+                    console.error('Ошибка при включении сети:', error);
+                  });
+              }, 1000); // Ждем 1 секунду между отключением и включением
+            })
+            .catch(function (error) {
+              console.error('Ошибка при отключении сети:', error);
+            });
+        }
+
+        return true;
+      } catch (err) {
+        console.error('Ошибка при исправлении соединения:', err);
+        return false;
+      }
+    };
+
+    // Функция для проверки состояния Firebase
+    window.isFirebaseAvailable = function () {
+      try {
+        if (typeof firebase === 'undefined') return false;
+        const app = firebase.app();
+        return !!app;
+      } catch (e) {
+        console.error('Ошибка при проверке Firebase:', e);
+        return false;
+      }
+    };
+
+    // Добавляем обработчик исключений для Firebase
+    window.handleFirebaseException = function (exception) {
+      // Теперь принимаем строку вместо объекта
+      try {
+        console.error('Firebase ошибка:', exception);
+        return {
+          error: true,
+          message: exception
+        };
+      } catch (e) {
+        console.error('Ошибка при обработке исключения Firebase:', e);
+        return {
+          error: true,
+          message: 'Ошибка при обработке исключения'
+        };
+      }
+    };
+  </script>
+
+  <script>
+    window.addEventListener('load', function (ev) {
+      // Проверка доступности Firebase перед загрузкой Flutter
+      if (window.isFirebaseAvailable && window.isFirebaseAvailable()) {
+        console.log("Firebase доступен для Flutter приложения");
+      } else {
+        console.warn("Firebase не доступен или не инициализирован!");
+      }
+
+      // Индикатор загрузки
+      var loading = document.getElementById('loading');
+
+      window.addEventListener('flutter-first-frame', function () {
+        if (loading) {
+          loading.classList.add('fade');
+        }
+      });
+
+      try {
+        // Простая инициализация
+        _flutter = {};
+
+        // Непосредственная загрузка скомпилированного JS
+        var mainScript = document.createElement('script');
+        mainScript.src = 'main.dart.js';
+        mainScript.type = 'application/javascript';
+        document.body.appendChild(mainScript);
+      } catch (e) {
+        console.error('Ошибка при загрузке Flutter:', e);
+        if (loading) {
+          loading.innerHTML = '<div style="color: red; text-align: center; margin: 20px;">Ошибка при загрузке приложения.<br>Пожалуйста, обновите страницу.</div>';
+        }
+      }
+    });
+  </script>
+
+  <!-- Firebase config -->
+  <script>
+    // Your web app's Firebase configuration
+  </script>
+</body>
+
+</html>
