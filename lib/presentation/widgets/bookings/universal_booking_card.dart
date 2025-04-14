@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pater/domain/entities/booking.dart';
 import 'package:pater/domain/entities/property.dart';
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:pater/presentation/widgets/property/property_image_carousel.dart';
 import 'package:pater/presentation/widgets/bookings/booking_timer.dart';

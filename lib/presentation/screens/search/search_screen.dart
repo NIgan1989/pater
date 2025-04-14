@@ -13,6 +13,8 @@ import 'package:pater/presentation/widgets/common/app_button.dart';
 import 'package:pater/presentation/widgets/search/property_filters.dart';
 import 'package:pater/presentation/screens/property/property_details_screen.dart';
 import 'dart:async';
+import 'package:pater/domain/entities/user_role.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Исключение, возникающее при отказе пользователя предоставить разрешение на геолокацию
 class LocationPermissionDeniedException implements Exception {
@@ -46,7 +48,7 @@ class SearchContent extends StatefulWidget {
 class _SearchContentState extends State<SearchContent>
     with TickerProviderStateMixin {
   final PropertyService _propertyService = PropertyService();
-  final AuthService _authService = AuthService();
+  final AuthService _authService = getIt<AuthService>();
   final TextEditingController _searchController = TextEditingController();
 
   // Состояние экрана

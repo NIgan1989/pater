@@ -4,6 +4,7 @@ import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/presentation/widgets/auth/pin_code_input.dart';
 import 'package:pater/presentation/widgets/common/error_message.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран создания PIN-кода для входа
 class CreatePinScreen extends StatefulWidget {
@@ -15,7 +16,7 @@ class CreatePinScreen extends StatefulWidget {
 
 class _CreatePinScreenState extends State<CreatePinScreen> {
   final TextEditingController _pinController = TextEditingController();
-  final AuthService _authService = AuthService();
+  late final AuthService _authService;
 
   bool _obscurePin = true;
   bool _isPinCreated = false;
@@ -23,6 +24,12 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
   String? _firstPin;
   String? _errorMessage;
   bool _isDisposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = getIt<AuthService>();
+  }
 
   @override
   void dispose() {
@@ -41,7 +48,7 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
   /// Обработчик успешного создания PIN-кода
   void _onPinCreated() async {
     try {
-      final userId = await _authService.getUserId();
+      final userId = _authService.getUserId();
       if (userId == null) {
         _safeSetState(() {
           _errorMessage = 'Ошибка: ID пользователя не найден';
@@ -49,14 +56,7 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
         return;
       }
 
-      final success = await _authService.savePinCode(userId, _firstPin!);
-
-      if (!success) {
-        _safeSetState(() {
-          _errorMessage = 'Не удалось сохранить PIN-код';
-        });
-        return;
-      }
+      await _authService.savePinCode(_firstPin!);
 
       _safeSetState(() {
         _isPinCreated = true;

@@ -10,6 +10,7 @@ import 'package:pater/presentation/widgets/common/app_button.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран бронирования объекта недвижимости
 class BookingScreen extends StatefulWidget {
@@ -35,7 +36,7 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   final PropertyService _propertyService = PropertyService();
   final BookingService _bookingService = BookingService();
-  final AuthService _authService = AuthService();
+  late final AuthService _authService;
 
   final _formKey = GlobalKey<FormState>();
   final _guestsController = TextEditingController();
@@ -60,6 +61,7 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   void initState() {
     super.initState();
+    _authService = getIt<AuthService>();
     _isEditMode = widget.bookingId != null;
 
     if (_isEditMode) {
@@ -594,7 +596,9 @@ class _BookingScreenState extends State<BookingScreen> {
           }
 
           // Пытаемся восстановить сессию пользователя
-          final restored = await _authService.restoreUserSession(savedUserId);
+          final restored = await _authService.restoreUserSessionById(
+            savedUserId,
+          );
           if (restored) {
             debugPrint('Сессия пользователя успешно восстановлена');
           } else {

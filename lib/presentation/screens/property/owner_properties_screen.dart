@@ -4,6 +4,7 @@ import 'package:pater/core/constants/app_constants.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/domain/entities/property.dart';
 import 'package:pater/core/auth/auth_service.dart';
+import 'package:pater/core/di/service_locator.dart';
 import 'package:pater/presentation/widgets/common/error_view.dart';
 import 'package:pater/presentation/widgets/common/empty_state.dart';
 import 'package:pater/presentation/widgets/property/property_card.dart';
@@ -18,18 +19,27 @@ class OwnerPropertiesScreen extends StatefulWidget {
 }
 
 /// Тип фильтра для объектов владельца
-enum PropertyFilterType { active, archived }
+enum PropertyFilterType {
+  /// Активные объявления
+  active,
+
+  /// Неактивные объявления
+  inactive,
+
+  /// Архивированные объявления
+  archived,
+}
 
 class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   final PropertyService _propertyService = PropertyService();
-  final AuthService _authService = AuthService();
-
-  /// Контроллер табов
+  late final AuthService _authService;
   late TabController _tabController;
 
+  List<Property> _activeProperties = [];
+  List<Property> _inactiveProperties = [];
+  List<Property> _archivedProperties = [];
   bool _isLoading = true;
-  List<Property> _properties = [];
   String? _errorMessage;
 
   // Текущий выбранный фильтр
@@ -38,7 +48,8 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    _authService = getIt<AuthService>();
     _loadProperties();
 
     // Обработчик изменения вкладки
@@ -50,6 +61,9 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
               _currentFilter = PropertyFilterType.active;
               break;
             case 1:
+              _currentFilter = PropertyFilterType.inactive;
+              break;
+            case 2:
               _currentFilter = PropertyFilterType.archived;
               break;
           }
@@ -72,67 +86,46 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
     });
 
     try {
-      // Проверяем и восстанавливаем авторизацию
-      final isAuthorized = await _authService.checkAndRestoreAuth();
-      debugPrint('Проверка авторизации: $isAuthorized');
-
-      if (!isAuthorized) {
-        throw Exception('Пользователь не авторизован');
+      // Получаем ID текущего пользователя
+      final userId = _authService.currentUser?.id;
+      if (userId == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Пользователь не авторизован';
+        });
+        return;
       }
 
-      final userId = _authService.currentUser?.id ?? '';
-      debugPrint('Полученный userId: "$userId"');
+      // Загружаем объекты пользователя
+      final properties = await _propertyService.getPropertiesByOwnerId(userId);
 
-      if (userId.isEmpty) {
-        throw Exception('Пользователь не авторизован (пустой userId)');
+      // Фильтруем объекты по категориям
+      final active =
+          properties
+              .where((p) => p.isActive && p.status == PropertyStatus.available)
+              .toList();
+      final inactive = properties.where((p) => !p.isActive).toList();
+      final archived =
+          properties
+              .where((p) => p.isActive && p.status != PropertyStatus.available)
+              .toList();
+
+      if (mounted) {
+        setState(() {
+          _activeProperties = active;
+          _inactiveProperties = inactive;
+          _archivedProperties = archived;
+          _isLoading = false;
+        });
       }
-
-      // Загружаем объекты владельца
-      debugPrint('Начинаем загрузку объектов для владельца ID: $userId');
-      final properties = await _propertyService.getUserProperties(userId);
-
-      // Проверяем, не пустой ли список объектов
-      if (properties.isEmpty) {
-        debugPrint('ВНИМАНИЕ: Список объектов владельца пуст!');
-        debugPrint(
-          'Проверяем напрямую через propertyService.getPropertiesByOwnerId()',
-        );
-
-        final directProperties = await _propertyService.getPropertiesByOwnerId(
-          userId,
-        );
-        if (directProperties.isNotEmpty) {
-          debugPrint('Найдены объекты напрямую: ${directProperties.length}');
-          _properties = directProperties;
-        } else {
-          _properties = properties;
-          debugPrint('Объекты не найдены даже при прямом запросе');
-        }
-      } else {
-        _properties = properties;
-      }
-
-      debugPrint(
-        'Загружено объектов для владельца ID $userId: ${_properties.length}',
-      );
-
-      setState(() {
-        _isLoading = false;
-      });
     } catch (e) {
-      debugPrint('Ошибка при загрузке данных: $e');
-      setState(() {
-        _errorMessage = 'Ошибка при загрузке данных: ${e.toString()}';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+      }
     }
-  }
-
-  /// Показывает снэкбар с сообщением
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Обработчик нажатия на кнопку добавления объявления
@@ -148,30 +141,50 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
         .then((_) => _loadProperties());
   }
 
-  /// Активирует объявление
-  Future<void> _activateProperty(Property property) async {
+  /// Переводит объект в активное состояние
+  Future<void> _makePropertyAvailable(Property property) async {
     try {
-      final updatedProperty = property.copyWith(
-        isActive: true,
-        status: PropertyStatus.available,
-      );
-      await _propertyService.updateProperty(updatedProperty);
-      _showSnackBar('Объявление активировано');
-      _loadProperties();
-    } catch (e) {
-      _showSnackBar('Ошибка при активации объявления: ${e.toString()}');
-    }
-  }
+      setState(() {
+        _isLoading = true;
+      });
 
-  /// Архивирует объявление
-  Future<void> _archiveProperty(Property property) async {
-    try {
-      final updatedProperty = property.copyWith(isActive: false);
-      await _propertyService.updateProperty(updatedProperty);
-      _showSnackBar('Объявление архивировано');
-      _loadProperties();
+      // Вызываем метод с правильным числом параметров - он принимает только ID объекта
+      final result = await _propertyService.makePropertyAvailable(property.id);
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        if (result) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Объект успешно активирован'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          _loadProperties();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка при активации объекта'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     } catch (e) {
-      _showSnackBar('Ошибка при архивации объявления: ${e.toString()}');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -225,13 +238,55 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _activateProperty(property);
+                  _makePropertyAvailable(property);
                 },
                 child: const Text('Активировать'),
               ),
             ],
           ),
     );
+  }
+
+  /// Архивирует объект
+  Future<void> _archiveProperty(Property property) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Вместо использования copyWith, просто изменим статус объекта
+      // на нужный перед отправкой обновления
+      await _propertyService.updatePropertyStatus(
+        property.id,
+        PropertyStatus.archived,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Объект успешно архивирован'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        _loadProperties();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -268,7 +323,9 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
       return ErrorView(error: _errorMessage!, onRetry: _loadProperties);
     }
 
-    if (_properties.isEmpty) {
+    if (_activeProperties.isEmpty &&
+        _inactiveProperties.isEmpty &&
+        _archivedProperties.isEmpty) {
       return EmptyState(
         title: 'Нет объявлений',
         message: 'У вас пока нет объектов недвижимости',
@@ -283,13 +340,9 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
 
     // Фильтруем объекты по текущему фильтру
     final filteredProperties =
-        _properties.where((property) {
-          if (_currentFilter == PropertyFilterType.active) {
-            return property.isActive;
-          } else {
-            return !property.isActive;
-          }
-        }).toList();
+        _currentFilter == PropertyFilterType.active
+            ? _activeProperties
+            : _archivedProperties;
 
     return TabBarView(
       controller: _tabController,

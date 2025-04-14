@@ -11,6 +11,7 @@ import 'package:pater/data/datasources/firebase_connection_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/data/services/notification_service.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Инициализирует Firebase
 Future<void> initializeFirebase() async {
@@ -39,7 +40,7 @@ Future<void> initializeFirebase() async {
 
 Future<void> fixExistingPropertyStatuses() async {
   try {
-    final propertyService = PropertyService();
+    final propertyService = getIt<PropertyService>();
     await propertyService.fixAllPropertyStatuses();
   } catch (e) {
     debugPrint('Ошибка при исправлении статусов объектов: $e');
@@ -51,6 +52,9 @@ void main() async {
 
   // Инициализируем Firebase
   await initializeFirebase();
+
+  // Инициализируем сервис-локатор
+  await setupServiceLocator();
 
   // Инициализируем Mapbox и кэширование карт
   try {
@@ -71,7 +75,7 @@ void main() async {
   await fixExistingPropertyStatuses();
 
   // Инициализируем сервисы уведомлений
-  await NotificationService().init();
+  await NotificationService.getInstance().init();
 
   // Устанавливаем обработчик ошибок
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -96,7 +100,7 @@ void main() async {
 Future<void> debugPropertyStatus() async {
   try {
     final propertyId = 'zYs5ry3dUVDgt5jVZ6rh';
-    final propertyService = PropertyService();
+    final propertyService = getIt<PropertyService>();
     final property = await propertyService.getPropertyById(propertyId);
 
     if (property != null) {
@@ -114,7 +118,7 @@ Future<void> debugPropertyStatus() async {
 /// Функция для исправления статуса объекта
 Future<void> fixPropertyStatus(String propertyId) async {
   try {
-    final propertyService = PropertyService();
+    final propertyService = getIt<PropertyService>();
     final result = await propertyService.makePropertyAvailable(propertyId);
 
     if (result) {

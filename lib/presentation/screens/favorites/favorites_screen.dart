@@ -7,6 +7,7 @@ import 'package:pater/domain/entities/saved_search.dart';
 import 'package:pater/presentation/widgets/common/loading_indicator.dart';
 import 'package:pater/presentation/widgets/common/app_tab_bar.dart';
 import 'package:intl/intl.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран избранных объектов, доступный из нижней навигации
 class FavoritesScreen extends StatefulWidget {
@@ -18,7 +19,7 @@ class FavoritesScreen extends StatefulWidget {
 
 class _FavoritesScreenState extends State<FavoritesScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  final AuthService _authService = AuthService();
+  final AuthService _authService = getIt<AuthService>();
   final PropertyService _propertyService = PropertyService();
   final List<SavedSearch> _savedSearches = [];
 

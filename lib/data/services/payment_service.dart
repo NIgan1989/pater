@@ -4,6 +4,7 @@ import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/domain/entities/payment_receipt.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Enum для методов оплаты
 enum PaymentMethod {
@@ -22,8 +23,13 @@ enum PaymentMethod {
 
 /// Сервис для работы с платежами
 class PaymentService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final AuthService _authService = AuthService();
+  final FirebaseFirestore _firestore;
+  final AuthService _authService;
+
+  /// Конструктор с DI
+  PaymentService({FirebaseFirestore? firestore, AuthService? authService})
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _authService = authService ?? getIt<AuthService>();
 
   /// Инициализирован ли сервис
   bool _isInitialized = false;
@@ -32,9 +38,12 @@ class PaymentService {
   Future<void> init() async {
     if (_isInitialized) return;
 
-    // Инициализация
-
-    _isInitialized = true;
+    try {
+      // No need to set _authService since it's already initialized in the constructor
+      _isInitialized = true;
+    } catch (e) {
+      debugPrint('Ошибка при инициализации сервиса платежей: $e');
+    }
   }
 
   /// Убеждается, что сервис инициализирован

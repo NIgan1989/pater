@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +9,7 @@ import 'package:pater/data/services/cleaning_service.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/domain/entities/cleaning_request.dart';
 import 'package:pater/domain/entities/property.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Модель, объединяющая заявку на уборку и данные об объекте
 class CleaningRequestWithProperty {
@@ -28,7 +31,7 @@ class _CleanerBookingsScreenState extends State<CleanerBookingsScreen>
     with SingleTickerProviderStateMixin {
   final CleaningService _cleaningService = CleaningService();
   final PropertyService _propertyService = PropertyService();
-  final AuthService _authService = AuthService();
+  late final AuthService _authService;
 
   late TabController _tabController;
 
@@ -44,6 +47,7 @@ class _CleanerBookingsScreenState extends State<CleanerBookingsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _authService = getIt<AuthService>();
     _loadCleaningRequests();
   }
 

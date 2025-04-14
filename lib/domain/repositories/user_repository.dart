@@ -1,4 +1,5 @@
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 
 /// Интерфейс репозитория для работы с пользователями
 abstract class UserRepository {
@@ -49,4 +50,4 @@ abstract class UserRepository {
 
   /// Получает топ уборщиков
   Future<List<User>> getTopCleaners({int limit = 10});
-} 
+}

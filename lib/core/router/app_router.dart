@@ -24,6 +24,7 @@ import 'package:pater/presentation/screens/navigation/shell_screen.dart';
 import 'package:pater/presentation/screens/property/owner_properties_screen.dart';
 import 'package:pater/presentation/screens/property/edit_property_screen.dart';
 import 'package:pater/presentation/screens/bookings/owner_bookings_screen.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран для отображения ошибок
 class ErrorScreen extends StatelessWidget {
@@ -76,7 +77,7 @@ NavigatorObserver _createNavigationObserver() {
 
 /// Класс, управляющий маршрутизацией в приложении
 class AppRouter {
-  static final AuthService _authService = AuthService();
+  static final AuthService _authService = getIt<AuthService>();
 
   // Навигационные shell ключи для основных вкладок
   static final GlobalKey<NavigatorState> _rootNavigatorKey =

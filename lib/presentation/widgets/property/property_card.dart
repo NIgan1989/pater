@@ -6,6 +6,8 @@ import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pater/presentation/screens/property/property_details_screen.dart';
+import 'package:get_it/get_it.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Карточка объекта недвижимости для отображения в списке
 class PropertyCard extends StatefulWidget {
@@ -37,12 +39,13 @@ class PropertyCard extends StatefulWidget {
 }
 
 class _PropertyCardState extends State<PropertyCard> {
-  late bool _isFavorite;
-  final PropertyService _propertyService = PropertyService();
+  late final PropertyService _propertyService;
+  bool _isFavorite = false;
 
   @override
   void initState() {
     super.initState();
+    _propertyService = getIt<PropertyService>();
     _isFavorite = widget.isFavorite;
   }
 
@@ -62,7 +65,7 @@ class _PropertyCardState extends State<PropertyCard> {
     // Проверяем, что виджет всё ещё монтирован перед началом операции
     if (!mounted) return;
 
-    final authService = AuthService();
+    final authService = GetIt.I<AuthService>();
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     // Если пользователь не авторизован, перенаправляем на экран входа

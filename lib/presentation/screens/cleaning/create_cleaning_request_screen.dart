@@ -9,30 +9,30 @@ import 'package:pater/domain/entities/property.dart';
 import 'package:pater/domain/entities/cleaning_request.dart';
 import 'package:pater/presentation/widgets/common/app_button.dart';
 import 'package:pater/presentation/widgets/common/app_text_field.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран создания заявки на уборку для владельцев
 class CreateCleaningRequestScreen extends StatefulWidget {
   /// Идентификатор объекта недвижимости (опционально)
   final String? propertyId;
 
-  const CreateCleaningRequestScreen({
-    super.key,
-    this.propertyId,
-  });
+  const CreateCleaningRequestScreen({super.key, this.propertyId});
 
   @override
-  State<CreateCleaningRequestScreen> createState() => _CreateCleaningRequestScreenState();
+  State<CreateCleaningRequestScreen> createState() =>
+      _CreateCleaningRequestScreenState();
 }
 
-class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScreen> {
+class _CreateCleaningRequestScreenState
+    extends State<CreateCleaningRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _propertyService = PropertyService();
-  final _authService = AuthService();
+  late final AuthService _authService;
   final _cleaningService = CleaningService();
 
   // Контроллеры для форм
   final _descriptionController = TextEditingController();
-  
+
   bool _isLoading = true;
   bool _isSubmitting = false;
   List<Property> _ownerProperties = [];
@@ -42,22 +42,23 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
   TimeOfDay _selectedTime = const TimeOfDay(hour: 10, minute: 0);
   double _price = 0;
   CleaningUrgency _urgency = CleaningUrgency.low;
-  
+
   // Дополнительные услуги
   bool _windowCleaning = false;
   bool _balconyCleaning = false;
   bool _ironing = false;
-  
+
   // Контроллеры для адреса
   final _addressController = TextEditingController();
   final _cityController = TextEditingController();
-  
+
   @override
   void initState() {
     super.initState();
+    _authService = getIt<AuthService>();
     _loadOwnerProperties();
   }
-  
+
   @override
   void dispose() {
     _descriptionController.dispose();
@@ -65,49 +66,53 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
     _cityController.dispose();
     super.dispose();
   }
-  
+
   /// Загружает список объектов недвижимости текущего владельца
   Future<void> _loadOwnerProperties() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       final properties = await _propertyService.getOwnerProperties();
-      
+
       setState(() {
         _ownerProperties = properties;
-        
+
         // Если есть ID объекта из аргументов - выбираем его
         if (widget.propertyId != null) {
           _selectedProperty = properties.firstWhere(
             (property) => property.id == widget.propertyId,
-            orElse: () => properties.isNotEmpty ? properties.first : Property(
-              id: 'placeholder',
-              title: 'Не выбрано',
-              description: '',
-              ownerId: '',
-              type: PropertyType.apartment,
-              status: PropertyStatus.available,
-              imageUrls: [],
-              address: '',
-              city: '',
-              country: '',
-              latitude: 0,
-              longitude: 0,
-              pricePerNight: 0,
-              pricePerHour: 0,
-              area: 0,
-              rooms: 0,
-              maxGuests: 1,
-              checkInTime: '14:00',
-              checkOutTime: '12:00',
-            ),
+            orElse:
+                () =>
+                    properties.isNotEmpty
+                        ? properties.first
+                        : Property(
+                          id: 'placeholder',
+                          title: 'Не выбрано',
+                          description: '',
+                          ownerId: '',
+                          type: PropertyType.apartment,
+                          status: PropertyStatus.available,
+                          imageUrls: [],
+                          address: '',
+                          city: '',
+                          country: '',
+                          latitude: 0,
+                          longitude: 0,
+                          pricePerNight: 0,
+                          pricePerHour: 0,
+                          area: 0,
+                          rooms: 0,
+                          maxGuests: 1,
+                          checkInTime: '14:00',
+                          checkOutTime: '12:00',
+                        ),
           );
         } else if (properties.isNotEmpty) {
           _selectedProperty = properties.first;
         }
-        
+
         // Рассчитываем начальную цену
         if (_selectedProperty != null) {
           _calculatePrice();
@@ -130,7 +135,7 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       }
     }
   }
-  
+
   /// Возвращает строковое представление типа уборки для отображения в UI
   String _getCleaningTypeText(CleaningType type) {
     switch (type) {
@@ -153,7 +158,7 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
         return 'Уборка после гостей';
     }
   }
-  
+
   /// Возвращает строковое представление срочности
   String _getUrgencyText(CleaningUrgency urgency) {
     switch (urgency) {
@@ -167,13 +172,13 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
         return 'Срочная (в течение 24 часов)';
     }
   }
-  
+
   /// Возвращает текст для отображения выбранной даты и времени
   String _getFormattedDateTime() {
     final dateFormatter = DateFormat('dd MMMM yyyy', 'ru');
     return '${dateFormatter.format(_selectedDate)}, ${_selectedTime.format(context)}';
   }
-  
+
   /// Возвращает базовую стоимость в зависимости от типа уборки
   double _getBasePrice(CleaningType type) {
     switch (type) {
@@ -196,16 +201,16 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
         return 160.0;
     }
   }
-  
+
   /// Рассчитывает ориентировочную стоимость уборки
   void _calculatePrice() {
     double basePrice = 0;
-    
+
     // Базовая цена в зависимости от площади объекта
     if (_selectedProperty != null) {
       basePrice = _selectedProperty!.area * _getBasePrice(_cleaningType);
     }
-    
+
     // Надбавка за тип уборки
     switch (_cleaningType) {
       case CleaningType.basic:
@@ -234,7 +239,7 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
         basePrice *= 1.4;
         break;
     }
-    
+
     // Надбавка за срочность
     switch (_urgency) {
       case CleaningUrgency.low:
@@ -250,38 +255,38 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
         basePrice *= 1.5;
         break;
     }
-    
+
     // Дополнительные услуги
     if (_windowCleaning) basePrice += 1000;
     if (_balconyCleaning) basePrice += 500;
     if (_ironing) basePrice += 800;
-    
+
     setState(() {
       _price = basePrice.roundToDouble();
     });
   }
-  
+
   /// Создает заявку на уборку
   Future<void> _createCleaningRequest() async {
     if (_formKey.currentState?.validate() != true) return;
-    
+
     setState(() {
       _isSubmitting = true;
     });
-    
+
     try {
       final user = _authService.currentUser;
-      
+
       if (user == null) {
         throw Exception('Пользователь не авторизован');
       }
-      
+
       // Формируем список дополнительных услуг
       List<String> additionalServices = [];
       if (_windowCleaning) additionalServices.add('Мытье окон');
       if (_balconyCleaning) additionalServices.add('Уборка балкона');
       if (_ironing) additionalServices.add('Глажка белья');
-      
+
       // Формируем дату и время уборки
       final cleaningDateTime = DateTime(
         _selectedDate.year,
@@ -290,9 +295,9 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
         _selectedTime.hour,
         _selectedTime.minute,
       );
-      
+
       final price = _price;
-      
+
       // Сохраняем заявку
       final requestId = await _cleaningService.createCleaningRequest(
         propertyId: _selectedProperty?.id ?? '',
@@ -306,11 +311,11 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
         address: _addressController.text,
         city: _cityController.text,
       );
-      
+
       setState(() {
         _isSubmitting = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -318,15 +323,18 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // Переход к странице заявки
-        context.pushNamed('cleaning_request_details', pathParameters: {'id': requestId.toString()});
+        context.pushNamed(
+          'cleaning_request_details',
+          pathParameters: {'id': requestId.toString()},
+        );
       }
     } catch (e) {
       setState(() {
         _isSubmitting = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -337,7 +345,7 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       }
     }
   }
-  
+
   /// Выбор типа уборки
   void _selectCleaningType(CleaningType type) {
     setState(() {
@@ -345,7 +353,7 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       _calculatePrice();
     });
   }
-  
+
   /// Выбор срочности
   void _selectUrgency(CleaningUrgency urgency) {
     setState(() {
@@ -353,13 +361,13 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       _calculatePrice();
     });
   }
-  
+
   /// Открывает диалог выбора даты
   Future<void> _selectDate() async {
     final now = DateTime.now();
     final firstDate = now;
     final lastDate = now.add(const Duration(days: 90));
-    
+
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
@@ -367,14 +375,14 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       lastDate: lastDate,
       locale: const Locale('ru', 'RU'),
     );
-    
+
     if (pickedDate != null && pickedDate != _selectedDate) {
       setState(() {
         _selectedDate = pickedDate;
       });
     }
   }
-  
+
   /// Открывает диалог выбора времени
   Future<void> _selectTime() async {
     final pickedTime = await showTimePicker(
@@ -382,21 +390,19 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       initialTime: _selectedTime,
       builder: (context, child) {
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            alwaysUse24HourFormat: true,
-          ),
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
           child: child!,
         );
       },
     );
-    
+
     if (pickedTime != null && pickedTime != _selectedTime) {
       setState(() {
         _selectedTime = pickedTime;
       });
     }
   }
-  
+
   /// Строит выбор объекта недвижимости
   Widget _buildPropertySelector(ThemeData theme) {
     return Column(
@@ -460,15 +466,16 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
               ),
               hintText: 'Выберите объект',
             ),
-            items: _ownerProperties.map((property) {
-              return DropdownMenuItem<Property>(
-                value: property,
-                child: Text(
-                  property.title,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
+            items:
+                _ownerProperties.map((property) {
+                  return DropdownMenuItem<Property>(
+                    value: property,
+                    child: Text(
+                      property.title,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList(),
             onChanged: (property) {
               setState(() {
                 _selectedProperty = property;
@@ -479,22 +486,28 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       ],
     );
   }
-  
+
   /// Строит опцию типа уборки
-  Widget _buildCleaningTypeOption(CleaningType type, IconData icon, ThemeData theme) {
+  Widget _buildCleaningTypeOption(
+    CleaningType type,
+    IconData icon,
+    ThemeData theme,
+  ) {
     final isSelected = _cleaningType == type;
-    
+
     return Card(
       elevation: 0,
-      color: isSelected
-          ? theme.colorScheme.primary.withValues(alpha: 0.1)
-          : theme.colorScheme.surface,
+      color:
+          isSelected
+              ? theme.colorScheme.primary.withValues(alpha: 0.1)
+              : theme.colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppConstants.radiusM),
         side: BorderSide(
-          color: isSelected
-              ? theme.colorScheme.primary
-              : theme.colorScheme.outline.withValues(alpha: 0.3),
+          color:
+              isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline.withValues(alpha: 0.3),
           width: isSelected ? 2 : 1,
         ),
       ),
@@ -509,16 +522,18 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
               Container(
                 padding: const EdgeInsets.all(AppConstants.paddingM),
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.primary.withValues(alpha: 0.1),
+                  color:
+                      isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   icon,
-                  color: isSelected
-                      ? theme.colorScheme.onPrimary
-                      : theme.colorScheme.primary,
+                  color:
+                      isSelected
+                          ? theme.colorScheme.onPrimary
+                          : theme.colorScheme.primary,
                   size: 28,
                 ),
               ),
@@ -537,7 +552,7 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       ),
     );
   }
-  
+
   /// Строит опции типов уборки
   Widget _buildCleaningTypes(ThemeData theme) {
     return Column(
@@ -574,11 +589,7 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
               Icons.construction,
               theme,
             ),
-            _buildCleaningTypeOption(
-              CleaningType.window,
-              Icons.window,
-              theme,
-            ),
+            _buildCleaningTypeOption(CleaningType.window, Icons.window, theme),
             _buildCleaningTypeOption(
               CleaningType.carpet,
               Icons.home_work,
@@ -589,22 +600,28 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
       ],
     );
   }
-  
+
   /// Строит опцию срочности
-  Widget _buildUrgencyOption(CleaningUrgency urgency, String priceChange, ThemeData theme) {
+  Widget _buildUrgencyOption(
+    CleaningUrgency urgency,
+    String priceChange,
+    ThemeData theme,
+  ) {
     final isSelected = _urgency == urgency;
-    
+
     return Card(
       elevation: 0,
-      color: isSelected
-          ? theme.colorScheme.primary.withValues(alpha: 0.1)
-          : theme.colorScheme.surface,
+      color:
+          isSelected
+              ? theme.colorScheme.primary.withValues(alpha: 0.1)
+              : theme.colorScheme.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppConstants.radiusM),
         side: BorderSide(
-          color: isSelected
-              ? theme.colorScheme.primary
-              : theme.colorScheme.outline.withValues(alpha: 0.3),
+          color:
+              isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline.withValues(alpha: 0.3),
           width: isSelected ? 2 : 1,
         ),
       ),
@@ -628,9 +645,10 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
               Text(
                 priceChange,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: isSelected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  color:
+                      isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -644,293 +662,313 @@ class _CreateCleaningRequestScreenState extends State<CreateCleaningRequestScree
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Создание заявки на уборку'),
         centerTitle: true,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(AppConstants.paddingM),
-                children: [
-                  // Выбор объекта недвижимости
-                  _buildPropertySelector(theme),
-                  
-                  // Адрес, если нет выбранного объекта или для ручного ввода
-                  if (_selectedProperty == null || _urgency != CleaningUrgency.low) ...[
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Form(
+                key: _formKey,
+                child: ListView(
+                  padding: const EdgeInsets.all(AppConstants.paddingM),
+                  children: [
+                    // Выбор объекта недвижимости
+                    _buildPropertySelector(theme),
+
+                    // Адрес, если нет выбранного объекта или для ручного ввода
+                    if (_selectedProperty == null ||
+                        _urgency != CleaningUrgency.low) ...[
+                      const SizedBox(height: AppConstants.paddingL),
+                      Text(
+                        'Укажите адрес',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      AppTextField(
+                        controller: _addressController,
+                        label: 'Адрес',
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Введите адрес';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: AppConstants.paddingM),
+                      AppTextField(
+                        controller: _cityController,
+                        label: 'Город',
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Введите город';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+
+                    // Выбор типа уборки
+                    _buildCleaningTypes(theme),
+
+                    // Выбор срочности
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: AppConstants.paddingL),
+                        Text(
+                          'Выберите срочность',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: AppConstants.paddingM),
+                        GridView.count(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisCount: 2,
+                          childAspectRatio: 2.0,
+                          crossAxisSpacing: AppConstants.paddingS,
+                          mainAxisSpacing: AppConstants.paddingS,
+                          children: [
+                            _buildUrgencyOption(
+                              CleaningUrgency.low,
+                              'Обычная цена',
+                              theme,
+                            ),
+                            _buildUrgencyOption(
+                              CleaningUrgency.medium,
+                              '+20% к стоимости',
+                              theme,
+                            ),
+                            _buildUrgencyOption(
+                              CleaningUrgency.high,
+                              '+50% к стоимости',
+                              theme,
+                            ),
+                            _buildUrgencyOption(
+                              CleaningUrgency.urgent,
+                              '+100% к стоимости',
+                              theme,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    // Выбор даты и времени
                     const SizedBox(height: AppConstants.paddingL),
                     Text(
-                      'Укажите адрес',
+                      'Выберите дату и время',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    InkWell(
+                      onTap: () async {
+                        await _selectDate();
+                        if (!mounted) return;
+                        await _selectTime();
+                      },
+                      borderRadius: BorderRadius.circular(AppConstants.radiusM),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppConstants.paddingM),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: theme.colorScheme.outline.withValues(
+                              alpha: 0.3,
+                            ),
+                            width: 1,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radiusM,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today),
+                            const SizedBox(width: AppConstants.paddingM),
+                            Text(
+                              _getFormattedDateTime(),
+                              style: theme.textTheme.bodyLarge,
+                            ),
+                            const Spacer(),
+                            const Icon(Icons.arrow_drop_down),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Дополнительные услуги
+                    const SizedBox(height: AppConstants.paddingL),
+                    Text(
+                      'Дополнительные услуги',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingM),
+                    CheckboxListTile(
+                      value: _windowCleaning,
+                      onChanged: (value) {
+                        setState(() {
+                          _windowCleaning = value ?? false;
+                          _calculatePrice();
+                        });
+                      },
+                      title: const Text('Мытье окон'),
+                      subtitle: const Text('+1000 ₽'),
+                      secondary: const Icon(Icons.window),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radiusM,
+                        ),
+                        side: BorderSide(
+                          color: theme.colorScheme.outline.withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.paddingM,
+                        vertical: AppConstants.paddingS,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingS),
+                    CheckboxListTile(
+                      value: _balconyCleaning,
+                      onChanged: (value) {
+                        setState(() {
+                          _balconyCleaning = value ?? false;
+                          _calculatePrice();
+                        });
+                      },
+                      title: const Text('Уборка балкона'),
+                      subtitle: const Text('+800 ₽'),
+                      secondary: const Icon(Icons.balcony),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radiusM,
+                        ),
+                        side: BorderSide(
+                          color: theme.colorScheme.outline.withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.paddingM,
+                        vertical: AppConstants.paddingS,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.paddingS),
+                    CheckboxListTile(
+                      value: _ironing,
+                      onChanged: (value) {
+                        setState(() {
+                          _ironing = value ?? false;
+                          _calculatePrice();
+                        });
+                      },
+                      title: const Text('Глажка белья'),
+                      subtitle: const Text('+1200 ₽'),
+                      secondary: const Icon(Icons.iron),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radiusM,
+                        ),
+                        side: BorderSide(
+                          color: theme.colorScheme.outline.withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.paddingM,
+                        vertical: AppConstants.paddingS,
+                      ),
+                    ),
+
+                    // Комментарий
+                    const SizedBox(height: AppConstants.paddingL),
+                    Text(
+                      'Комментарий',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: AppConstants.paddingM),
                     AppTextField(
-                      controller: _addressController,
-                      label: 'Адрес',
+                      controller: _descriptionController,
+                      label: 'Комментарий к заявке',
+                      maxLines: 3,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Введите адрес';
+                          return 'Введите описание';
                         }
                         return null;
                       },
                     ),
-                    const SizedBox(height: AppConstants.paddingM),
-                    AppTextField(
-                      controller: _cityController,
-                      label: 'Город',
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Введите город';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                  
-                  // Выбор типа уборки
-                  _buildCleaningTypes(theme),
-                  
-                  // Выбор срочности
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: AppConstants.paddingL),
-                      Text(
-                        'Выберите срочность',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: AppConstants.paddingM),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        childAspectRatio: 2.0,
-                        crossAxisSpacing: AppConstants.paddingS,
-                        mainAxisSpacing: AppConstants.paddingS,
-                        children: [
-                          _buildUrgencyOption(
-                            CleaningUrgency.low,
-                            'Обычная цена',
-                            theme,
-                          ),
-                          _buildUrgencyOption(
-                            CleaningUrgency.medium,
-                            '+20% к стоимости',
-                            theme,
-                          ),
-                          _buildUrgencyOption(
-                            CleaningUrgency.high,
-                            '+50% к стоимости',
-                            theme,
-                          ),
-                          _buildUrgencyOption(
-                            CleaningUrgency.urgent,
-                            '+100% к стоимости',
-                            theme,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  
-                  // Выбор даты и времени
-                  const SizedBox(height: AppConstants.paddingL),
-                  Text(
-                    'Выберите дату и время',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingM),
-                  InkWell(
-                    onTap: () async {
-                      await _selectDate();
-                      if (!mounted) return;
-                      await _selectTime();
-                    },
-                    borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                    child: Container(
+
+                    // Стоимость и кнопка создания
+                    const SizedBox(height: AppConstants.paddingL),
+                    Container(
                       padding: const EdgeInsets.all(AppConstants.paddingM),
                       decoration: BoxDecoration(
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                          width: 1,
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radiusM,
                         ),
-                        borderRadius: BorderRadius.circular(AppConstants.radiusM),
                       ),
-                      child: Row(
+                      child: Column(
                         children: [
-                          const Icon(Icons.calendar_today),
-                          const SizedBox(width: AppConstants.paddingM),
-                          Text(
-                            _getFormattedDateTime(),
-                            style: theme.textTheme.bodyLarge,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Примерная стоимость:',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                '${_price.toInt()} ₽',
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                          const Spacer(),
-                          const Icon(Icons.arrow_drop_down),
+                          const SizedBox(height: AppConstants.paddingS),
+                          const Text(
+                            'Окончательная стоимость может отличаться в зависимости от предложений клинеров',
+                            style: TextStyle(
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                  
-                  // Дополнительные услуги
-                  const SizedBox(height: AppConstants.paddingL),
-                  Text(
-                    'Дополнительные услуги',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+
+                    const SizedBox(height: AppConstants.paddingL),
+                    AppButton.primary(
+                      text: 'Создать заявку',
+                      onPressed: _isSubmitting ? null : _createCleaningRequest,
+                      isLoading: _isSubmitting,
+                      icon: Icons.add,
                     ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingM),
-                  CheckboxListTile(
-                    value: _windowCleaning,
-                    onChanged: (value) {
-                      setState(() {
-                        _windowCleaning = value ?? false;
-                        _calculatePrice();
-                      });
-                    },
-                    title: const Text('Мытье окон'),
-                    subtitle: const Text('+1000 ₽'),
-                    secondary: const Icon(Icons.window),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                      side: BorderSide(
-                        color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingM,
-                      vertical: AppConstants.paddingS,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingS),
-                  CheckboxListTile(
-                    value: _balconyCleaning,
-                    onChanged: (value) {
-                      setState(() {
-                        _balconyCleaning = value ?? false;
-                        _calculatePrice();
-                      });
-                    },
-                    title: const Text('Уборка балкона'),
-                    subtitle: const Text('+800 ₽'),
-                    secondary: const Icon(Icons.balcony),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                      side: BorderSide(
-                        color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingM,
-                      vertical: AppConstants.paddingS,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingS),
-                  CheckboxListTile(
-                    value: _ironing,
-                    onChanged: (value) {
-                      setState(() {
-                        _ironing = value ?? false;
-                        _calculatePrice();
-                      });
-                    },
-                    title: const Text('Глажка белья'),
-                    subtitle: const Text('+1200 ₽'),
-                    secondary: const Icon(Icons.iron),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                      side: BorderSide(
-                        color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingM,
-                      vertical: AppConstants.paddingS,
-                    ),
-                  ),
-                  
-                  // Комментарий
-                  const SizedBox(height: AppConstants.paddingL),
-                  Text(
-                    'Комментарий',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingM),
-                  AppTextField(
-                    controller: _descriptionController,
-                    label: 'Комментарий к заявке',
-                    maxLines: 3,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Введите описание';
-                      }
-                      return null;
-                    },
-                  ),
-                  
-                  // Стоимость и кнопка создания
-                  const SizedBox(height: AppConstants.paddingL),
-                  Container(
-                    padding: const EdgeInsets.all(AppConstants.paddingM),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusM),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Примерная стоимость:',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${_price.toInt()} ₽',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppConstants.paddingS),
-                        const Text(
-                          'Окончательная стоимость может отличаться в зависимости от предложений клинеров',
-                          style: TextStyle(
-                            fontStyle: FontStyle.italic,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: AppConstants.paddingL),
-                  AppButton.primary(
-                    text: 'Создать заявку',
-                    onPressed: _isSubmitting ? null : _createCleaningRequest,
-                    isLoading: _isSubmitting,
-                    icon: Icons.add,
-                  ),
-                  const SizedBox(height: AppConstants.paddingL),
-                ],
+                    const SizedBox(height: AppConstants.paddingL),
+                  ],
+                ),
               ),
-            ),
     );
   }
-} 
+}

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:get_it/get_it.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/core/auth/role_manager.dart';
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
 
 /// Экран профиля пользователя
@@ -14,8 +16,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final AuthService _authService = AuthService();
-  final RoleManager _roleManager = RoleManager();
+  // Получаем зарегистрированные синглтоны через GetIt
+  final _authService = GetIt.instance.get<AuthService>();
+  final _roleManager = GetIt.instance.get<RoleManager>();
 
   User? _user;
   List<UserRole> _userRoles = [];
@@ -42,7 +45,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // Получаем все роли пользователя
         final roles = await _roleManager.getUserRoles(user.id);
         // Получаем активную роль
-        final activeRole = await _roleManager.getActiveRole(user.id);
+        final activeRole = await _roleManager.getActiveRole();
 
         setState(() {
           _user = user;
@@ -68,21 +71,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_user == null) return;
 
     try {
-      final success = await _roleManager.setActiveRole(_user!.id, role);
+      // Устанавливаем активную роль
+      await _roleManager.setActiveRole(role);
 
       // После асинхронной операции проверяем, что виджет все еще в дереве
       if (!mounted) return;
 
-      if (success) {
-        setState(() {
-          _activeRole = role;
-        });
+      setState(() {
+        _activeRole = role;
+      });
 
-        // Обновляем интерфейс по активной роли
-        if (role != _user!.role) {
-          // Передача обновленной роли в другой метод без использования контекста
-          await _updateUserRole(role);
-        }
+      // Обновляем интерфейс по активной роли
+      if (role != _user!.role) {
+        // Передача обновленной роли в другой метод без использования контекста
+        await _updateUserRole(role);
       }
     } catch (e) {
       debugPrint('Ошибка при установке активной роли: $e');
@@ -98,17 +100,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final updatedUser = _user!.copyWith(role: role);
 
       // Обновляем пользователя в сервисе авторизации
-      final success = await _authService.updateUserRole(updatedUser);
+      // Метод возвращает void, поэтому мы просто вызываем его без проверки результата
+      await _authService.updateUserRole(_user!.id, role);
 
       // Проверяем, что виджет все еще в дереве после асинхронной операции
       if (!mounted) return;
 
-      // Если обновление прошло успешно, обновляем локальное состояние
-      if (success) {
-        setState(() {
-          _user = updatedUser;
-        });
-      }
+      // Обновляем локальное состояние пользователя
+      setState(() {
+        _user = updatedUser;
+      });
     } catch (e) {
       debugPrint('Ошибка при обновлении роли пользователя: $e');
     }
@@ -119,22 +120,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_user == null) return;
 
     try {
-      final success = await _roleManager.addUserRole(_user!.id, role);
+      // Метод возвращает void
+      await _roleManager.addUserRole(_user!.id, role);
 
       // Проверяем, что виджет все еще в дереве после асинхронной операции
       if (!mounted) return;
 
-      if (success) {
-        // Обновляем список ролей
-        final roles = await _roleManager.getUserRoles(_user!.id);
+      // Обновляем список ролей
+      final roles = await _roleManager.getUserRoles(_user!.id);
 
-        // Еще раз проверяем mounted после второй асинхронной операции
-        if (!mounted) return;
+      // Еще раз проверяем mounted после второй асинхронной операции
+      if (!mounted) return;
 
-        setState(() {
-          _userRoles = roles;
-        });
-      }
+      setState(() {
+        _userRoles = roles;
+      });
     } catch (e) {
       debugPrint('Ошибка при добавлении роли пользователю: $e');
     }
@@ -150,30 +150,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     try {
-      final success = await _roleManager.removeUserRole(_user!.id, role);
+      // Метод возвращает void
+      await _roleManager.removeUserRole(_user!.id, role);
 
       // Проверяем, что виджет все еще в дереве после асинхронной операции
       if (!mounted) return;
 
-      if (success) {
-        // Обновляем список ролей
-        final roles = await _roleManager.getUserRoles(_user!.id);
+      // Обновляем список ролей
+      final roles = await _roleManager.getUserRoles(_user!.id);
 
-        // Еще раз проверяем mounted после второй асинхронной операции
-        if (!mounted) return;
+      // Еще раз проверяем mounted после второй асинхронной операции
+      if (!mounted) return;
 
-        setState(() {
-          _userRoles = roles;
-        });
+      setState(() {
+        _userRoles = roles;
+      });
 
-        // Сохраняем флаг для последующего переключения роли
-        final needSwitchToClient = _activeRole == role;
+      // Сохраняем флаг для последующего переключения роли
+      final needSwitchToClient = _activeRole == role;
 
-        // Если нужно переключиться на клиента, делаем это в отдельном методе
-        if (needSwitchToClient && mounted) {
-          // Запускаем операцию переключения роли асинхронно, но не ждем ее завершения
-          _setActiveRole(UserRole.client);
-        }
+      // Если нужно переключиться на клиента, делаем это в отдельном методе
+      if (needSwitchToClient && mounted) {
+        // Запускаем операцию переключения роли асинхронно, но не ждем ее завершения
+        _setActiveRole(UserRole.client);
       }
     } catch (e) {
       debugPrint('Ошибка при удалении роли пользователя: $e');
@@ -190,11 +189,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           IconButton(
             icon: Icon(Icons.logout, color: theme.iconTheme.color),
-            onPressed: () async {
-              await _authService.signOut();
-              if (mounted) {
-                context.go('/home');
-              }
+            onPressed: () {
+              _handleSignOut();
             },
           ),
         ],
@@ -208,6 +204,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ? _buildNotAuthorizedView()
               : _buildProfileContent(),
     );
+  }
+
+  /// Обрабатывает выход из аккаунта
+  Future<void> _handleSignOut() async {
+    try {
+      await _authService.signOut();
+      if (mounted) {
+        GoRouter.of(context).go('/home');
+      }
+    } catch (e) {
+      debugPrint('Ошибка при выходе из аккаунта: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка при выходе: $e')));
+      }
+    }
   }
 
   /// Строит содержимое профиля для авторизованного пользователя
@@ -333,8 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         value: role,
                         child: Row(
                           children: [
-                            Icon(_roleManager.getRoleIcon(role)),
-                            const SizedBox(width: 8),
+                            // Используем вместо иконки текст, т.к. getRoleIcon возвращает строковый путь к ресурсу
                             Text(_roleManager.getRoleName(role)),
                           ],
                         ),
@@ -377,8 +389,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: SwitchListTile(
                 title: Row(
                   children: [
-                    Icon(_roleManager.getRoleIcon(role)),
-                    const SizedBox(width: 8),
+                    // Вместо икноки используем текст роли
                     Text(_roleManager.getRoleName(role)),
                   ],
                 ),

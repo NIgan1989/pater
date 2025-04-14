@@ -7,6 +7,7 @@ import 'package:pater/data/services/cleaning_service.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/domain/entities/cleaning_request.dart';
 import 'package:pater/domain/entities/property.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран для клинеров, где они могут управлять своими заявками на уборку
 class CleanerWorkboardScreen extends StatefulWidget {
@@ -18,9 +19,9 @@ class CleanerWorkboardScreen extends StatefulWidget {
 
 class _CleanerWorkboardScreenState extends State<CleanerWorkboardScreen>
     with SingleTickerProviderStateMixin {
-  final _cleaningService = CleaningService();
+  final CleaningService _cleaningService = CleaningService();
+  late final AuthService _authService;
   final _propertyService = PropertyService();
-  final _authService = AuthService();
 
   late TabController _tabController;
 
@@ -34,6 +35,7 @@ class _CleanerWorkboardScreenState extends State<CleanerWorkboardScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_handleTabChange);
+    _authService = getIt<AuthService>();
     _loadCleaningRequests();
   }
 

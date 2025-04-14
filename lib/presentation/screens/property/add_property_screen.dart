@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pater/core/constants/app_constants.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/domain/entities/property.dart';
-import 'package:pater/data/services/auth_service.dart';
+import 'package:pater/core/auth/auth_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pater/data/services/cloudinary_service.dart';
@@ -10,6 +10,7 @@ import 'package:pater/data/services/geocoding_service.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:pater/presentation/widgets/map/property_map.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран создания/редактирования объявления о недвижимости
 class AddPropertyScreen extends StatefulWidget {
@@ -24,7 +25,7 @@ class AddPropertyScreen extends StatefulWidget {
 
 class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final PropertyService _propertyService = PropertyService();
-  final AuthService _authService = AuthService();
+  late AuthService _authService;
 
   // Контроллеры формы
   final _formKey = GlobalKey<FormState>();
@@ -71,6 +72,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   void initState() {
     super.initState();
     _loadPropertyData();
+    _authService = getIt<AuthService>();
   }
 
   @override

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pater/core/auth/auth_service.dart';
+import 'package:pater/core/di/service_locator.dart';
 import 'package:pater/data/services/booking_service.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/data/services/user_service.dart';
 import 'package:pater/domain/entities/booking.dart';
 import 'package:pater/domain/entities/property.dart';
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 import 'package:pater/presentation/widgets/bookings/universal_booking_card.dart';
 import 'dart:async';
 
@@ -35,17 +37,17 @@ class ClientBookingsScreen extends StatefulWidget {
 }
 
 class _ClientBookingsScreenState extends State<ClientBookingsScreen>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   final PropertyService _propertyService = PropertyService();
-  final AuthService _authService = AuthService();
-  final UserService _userService = UserService();
   final BookingService _bookingService = BookingService();
+  late final AuthService _authService;
+  final UserService _userService = UserService();
 
   /// Контроллер табов
   late TabController _tabController;
 
   /// Флаг загрузки
-  bool _isLoading = false;
+  bool _isLoading = true;
 
   /// Сообщение об ошибке
   String? _errorMessage;
@@ -93,6 +95,7 @@ class _ClientBookingsScreenState extends State<ClientBookingsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _authService = getIt<AuthService>();
     _loadBookings();
 
     // Проверяем и обновляем статусы бронирований каждую минуту

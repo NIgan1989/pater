@@ -1,26 +1,59 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:pater/core/auth/auth_service.dart';
+import 'package:pater/core/auth/role_manager.dart';
 import 'package:pater/domain/entities/booking.dart';
 import 'package:pater/domain/entities/notification.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/data/services/user_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Сервис для управления уведомлениями в приложении
 class NotificationService {
-  static final NotificationService _instance = NotificationService._internal();
+  static NotificationService? _instance;
 
-  factory NotificationService() {
-    return _instance;
-  }
-
-  NotificationService._internal();
-
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final AuthService _authService = AuthService();
+  final FirebaseFirestore _firestore;
+  late final AuthService _authService;
   late final PropertyService _propertyService;
   late final UserService _userService;
   bool _isInitialized = false;
+
+  /// Создает экземпляр сервиса с необходимыми зависимостями
+  NotificationService({
+    required FirebaseFirestore firestore,
+    required SharedPreferences prefs,
+    required RoleManager roleManager,
+  }) : _firestore = firestore {
+    _authService = AuthService(
+      auth: firebase.FirebaseAuth.instance,
+      firestore: firestore,
+      prefs: prefs,
+      roleManager: roleManager,
+    );
+  }
+
+  /// Фабричный метод для создания экземпляра с использованием GetIt
+  factory NotificationService.withDependencies({
+    required FirebaseFirestore firestore,
+    required SharedPreferences prefs,
+    required RoleManager roleManager,
+  }) {
+    return NotificationService(
+      firestore: firestore,
+      prefs: prefs,
+      roleManager: roleManager,
+    );
+  }
+
+  /// Возвращает экземпляр синглтона
+  static NotificationService getInstance() {
+    _instance ??= NotificationService._internal();
+    return _instance!;
+  }
+
+  /// Приватный конструктор для реализации паттерна Singleton
+  NotificationService._internal() : _firestore = FirebaseFirestore.instance;
 
   /// Инициализирует сервис уведомлений
   Future<void> init() async {

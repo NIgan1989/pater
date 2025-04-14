@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pater/core/auth/auth_service.dart';
+import 'package:pater/core/di/service_locator.dart';
 import 'package:pater/presentation/screens/search/search_screen.dart';
 
 /// Главный экран приложения
@@ -14,11 +15,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final AuthService _authService = AuthService();
+  late final AuthService _authService;
 
   @override
   void initState() {
     super.initState();
+    _authService = getIt<AuthService>();
     _checkAuth();
   }
 

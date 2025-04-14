@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:get_it/get_it.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 import 'package:pater/presentation/widgets/navigation/app_bottom_navigation_bar.dart';
 
 /// Базовый shell-экран для унифицированной навигации по приложению
@@ -21,7 +23,7 @@ class ShellScreen extends StatefulWidget {
 }
 
 class _ShellScreenState extends State<ShellScreen> {
-  final AuthService _authService = AuthService();
+  final _authService = GetIt.instance.get<AuthService>();
   late User? _user;
 
   @override

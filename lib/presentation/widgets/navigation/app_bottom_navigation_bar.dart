@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 import 'package:pater/core/constants/app_constants.dart';
 
 /// Улучшенная нижняя навигационная панель приложения с анимациями
@@ -82,6 +82,15 @@ class AppBottomNavigationBar extends StatelessWidget {
             icon: Icon(Icons.support_agent_outlined),
             activeIcon: Icon(Icons.support_agent),
             label: 'Поддержка',
+          ),
+        );
+        break;
+      case UserRole.admin:
+        items.add(
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.admin_panel_settings_outlined),
+            activeIcon: Icon(Icons.admin_panel_settings),
+            label: 'Управление',
           ),
         );
         break;

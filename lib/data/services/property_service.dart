@@ -5,8 +5,9 @@ import 'package:pater/domain/entities/property.dart';
 import 'package:pater/domain/entities/booking.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:pater/data/services/auth_service.dart';
+import 'package:pater/core/auth/auth_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Класс для представления географических координат
 class Location {
@@ -18,28 +19,18 @@ class Location {
 
 /// Сервис для работы с объектами недвижимости
 class PropertyService {
-  static final PropertyService _instance = PropertyService._internal();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  bool _isInitialized = false;
+  final FirebaseFirestore _firestore;
+  final FirebaseStorage _storage;
+  final AuthService _authService;
 
-  PropertyService._internal();
-
-  /// Фабричный конструктор
-  factory PropertyService() {
-    return _instance;
-  }
-
-  /// Проверяет, инициализирован ли сервис
-  bool get isInitialized => _isInitialized;
-
-  /// Инициализирует сервис и подготавливает данные
-  Future<void> init() async {
-    if (_isInitialized) return;
-
-    // Отмечаем, что сервис инициализирован
-    _isInitialized = true;
-  }
+  /// Конструктор с DI
+  PropertyService({
+    FirebaseFirestore? firestore,
+    FirebaseStorage? storage,
+    AuthService? authService,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _storage = storage ?? FirebaseStorage.instance,
+       _authService = authService ?? getIt<AuthService>();
 
   /// Получает все объекты недвижимости
   Future<List<Property>> getAllProperties() async {
@@ -262,27 +253,42 @@ class PropertyService {
 
   /// Возвращает список объектов недвижимости, принадлежащих текущему пользователю
   Future<List<Property>> getOwnerProperties() async {
-    final authService = AuthService();
-    final userId = await authService.getCurrentUserId();
+    try {
+      final userId = await _authService.getCurrentUserId();
+      if (userId.isEmpty) {
+        debugPrint('getOwnerProperties: userId пустой');
+        return [];
+      }
 
-    if (userId.isEmpty) {
-      debugPrint('getOwnerProperties: userId пустой');
+      debugPrint('getOwnerProperties: userId = $userId');
+      return getPropertiesByOwnerId(userId);
+    } catch (e) {
+      debugPrint('Ошибка при получении объектов владельца: $e');
       return [];
     }
-
-    debugPrint('getOwnerProperties: userId = $userId');
-    return getPropertiesByOwnerId(userId);
   }
 
   /// Возвращает список объектов недвижимости, принадлежащих указанному пользователю
-  Future<List<Property>> getUserProperties(String userId) async {
-    if (userId.isEmpty) {
-      debugPrint('getUserProperties: передан пустой userId');
+  Future<List<Property>> getUserProperties() async {
+    try {
+      // Получаем ID пользователя
+      final userId = await _authService.getCurrentUserId();
+      if (userId.isEmpty) {
+        return [];
+      }
+
+      // Запрашиваем объекты недвижимости, принадлежащие пользователю
+      final snapshot =
+          await _firestore
+              .collection('properties')
+              .where('owner_id', isEqualTo: userId)
+              .get();
+
+      return snapshot.docs.map((doc) => _documentToProperty(doc)).toList();
+    } catch (e) {
+      debugPrint('Ошибка при получении объектов пользователя: $e');
       return [];
     }
-
-    debugPrint('getUserProperties: запрашиваем объекты для userId = $userId');
-    return getPropertiesByOwnerId(userId);
   }
 
   /// Создает новый объект
@@ -594,8 +600,7 @@ class PropertyService {
   Future<Property> createPropertyForOwner(Property property) async {
     try {
       // Получаем ID текущего пользователя
-      final authService = AuthService();
-      final userId = await authService.getCurrentUserId();
+      final userId = await _authService.getCurrentUserId();
       if (userId.isEmpty) {
         throw Exception('Пользователь не авторизован');
       }

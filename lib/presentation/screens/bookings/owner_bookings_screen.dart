@@ -2,20 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:pater/core/auth/auth_service.dart';
+import 'package:pater/core/di/service_locator.dart';
 import 'package:pater/data/services/booking_service.dart';
+import 'package:pater/data/services/property_service.dart';
 import 'package:pater/domain/entities/booking.dart';
+import 'package:pater/domain/entities/property.dart';
+import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
 import 'package:pater/presentation/widgets/common/error_view.dart';
 import 'package:pater/presentation/widgets/common/empty_state.dart';
 import 'dart:async';
 
 // Импортируем недостающие сервисы и сущности
-import 'package:pater/core/auth/auth_service.dart';
-import 'package:pater/data/services/property_service.dart';
-import 'package:pater/domain/entities/property.dart';
 import 'package:pater/domain/entities/user.dart';
 import 'package:pater/presentation/widgets/bookings/universal_booking_card.dart';
-import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
+import 'package:pater/domain/entities/user_role.dart';
 
 /// Экран управления бронированиями для владельца.
 /// Позволяет просматривать список бронирований и управлять ими.
@@ -47,23 +48,29 @@ class PropertyWithBookings {
 class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     with TickerProviderStateMixin {
   final PropertyService _propertyService = PropertyService();
-  final AuthService _authService = AuthService();
   final BookingService _bookingService = BookingService();
+  late final AuthService _authService;
 
   /// Контроллер табов
   late TabController _tabController;
 
-  bool _isLoading = true;
-  List<PropertyWithBookings> _properties = [];
-  final Map<String, List<Booking>> _propertyBookings = {};
-  final Map<String, User?> _bookingClients = {};
+  /// Флаг загрузки
+  bool _isLoading = false;
+
+  /// Сообщение об ошибке
   String? _errorMessage;
 
-  // Текущий выбранный фильтр
+  /// Объекты недвижимости (для отображения информации)
+  Map<String, Property> _properties = {};
+
+  /// Текущий выбранный фильтр
   BookingFilterType _currentFilter = BookingFilterType.active;
 
-  // Добавляем таймер для обновления статусов бронирований
-  Timer? _updateTimer;
+  /// Бронирования по объекту недвижимости
+  Map<String, List<Booking>> _propertyBookings = {};
+
+  /// Список клиентов для бронирований
+  final Map<String, User> _bookingClients = {};
 
   @override
   void initState() {
@@ -72,39 +79,12 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       length: 3,
       vsync: this,
     ); // 3 вкладки вместо 4
+    _authService = getIt<AuthService>();
     _loadData();
-
-    // Обработчик изменения вкладки
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) {
-        // При переключении вкладок мы просто обновляем состояние интерфейса
-        setState(() {
-          switch (_tabController.index) {
-            case 0:
-              _currentFilter = BookingFilterType.active;
-              break;
-            case 1:
-              _currentFilter = BookingFilterType.booked;
-              break;
-            case 2:
-              _currentFilter = BookingFilterType.cleaning;
-              break;
-          }
-        });
-      }
-    });
-
-    // Проверяем и обновляем статусы бронирований каждую минуту
-    _updateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      if (mounted) {
-        _checkAndUpdateBookingStatuses();
-      }
-    });
   }
 
   @override
   void dispose() {
-    _updateTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -134,7 +114,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
         if (lastUserId != null && lastUserId.isNotEmpty) {
           // Восстанавливаем сессию используя ID последнего пользователя
-          final success = await _authService.restoreUserSession(lastUserId);
+          final success = await _authService.restoreUserSessionById(lastUserId);
 
           if (!success) {
             throw Exception('Не удалось восстановить сессию пользователя');
@@ -147,9 +127,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       }
 
       // Загружаем объекты пользователя
-      final properties = await _propertyService.getUserProperties(
-        _authService.currentUser!.id,
-      );
+      final properties = await _propertyService.getUserProperties();
 
       // Загружаем бронирования пользователя
       final bookings = await _bookingService.getOwnerBookings();
@@ -162,6 +140,9 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         }
         bookingsByProperty[booking.propertyId]!.add(booking);
       }
+
+      // Обновляем хранилище бронирований
+      _propertyBookings = bookingsByProperty;
 
       // Создаем список объектов с их бронированиями
       final List<PropertyWithBookings> propertiesWithBookings = [];
@@ -177,7 +158,11 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       // Обновляем состояние
       if (mounted) {
         setState(() {
-          _properties = propertiesWithBookings;
+          _properties = propertiesWithBookings.fold(
+            {},
+            (map, propertyWithBookings) =>
+                map..[propertyWithBookings.id] = propertyWithBookings.property,
+          );
           _isLoading = false;
         });
       }
@@ -202,25 +187,48 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
   /// Подтверждает бронирование
   Future<void> _confirmBooking(Booking booking) async {
     try {
-      // Обновляем статус бронирования на "ожидает оплаты"
-      final success = await _bookingService.confirmBooking(booking.id);
+      setState(() {
+        _isLoading = true;
+      });
 
-      if (success) {
-        // Обновляем список бронирований
-        await _loadData();
+      // Правильная сигнатура метода confirmBooking - он принимает только ID бронирования
+      final result = await _bookingService.confirmBooking(booking.id);
 
-        // Показываем сообщение об успехе
-        _showSnackBar('Бронирование подтверждено, ожидает оплаты');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
 
-        // Переключаемся на вкладку "Активные" (где теперь будет отображаться бронирование)
-        _tabController.animateTo(
-          0,
-        ); // Индекс 0 соответствует вкладке "Активные"
-      } else {
-        _showSnackBar('Ошибка при подтверждении бронирования');
+        if (result) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Бронирование подтверждено'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Обновляем список бронирований
+          _loadData();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка при подтверждении бронирования'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      _showSnackBar('Ошибка при подтверждении бронирования: ${e.toString()}');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -375,7 +383,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
                   style: TextStyle(
                     color: Theme.of(
                       context,
-                    ).colorScheme.onSurface.withValues(alpha: 153),
+                    ).colorScheme.onSurface.withAlpha(179),
                     fontSize: 12,
                   ),
                 ),
@@ -448,7 +456,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
                     radius: 30,
                     backgroundColor: Theme.of(
                       context,
-                    ).colorScheme.primary.withValues(alpha: 66),
+                    ).colorScheme.primary.withAlpha(66),
                     child: Text(
                       user.initials,
                       style: TextStyle(
@@ -536,23 +544,6 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     context.pushNamed('edit_property', pathParameters: {'id': propertyId});
   }
 
-  /// Проверяет и обновляет статусы бронирований
-  Future<void> _checkAndUpdateBookingStatuses() async {
-    if (!mounted) return;
-
-    try {
-      // Запускаем обновление просроченных бронирований через сервис
-      await _bookingService.checkAndUpdateExpiredBookings();
-
-      // После обновления статусов в БД, перезагружаем данные, если экран все еще активен
-      if (mounted) {
-        _loadData(); // Перезагружаем все данные
-      }
-    } catch (e) {
-      debugPrint('Ошибка при проверке статусов бронирования владельца: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -570,7 +561,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           labelColor: Theme.of(context).colorScheme.primary,
           unselectedLabelColor: Theme.of(
             context,
-          ).colorScheme.onSurface.withValues(alpha: 179),
+          ).colorScheme.onSurface.withAlpha(179),
           indicatorColor: Theme.of(context).colorScheme.primary,
         ),
         actions: [
@@ -677,10 +668,10 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     }
 
     // Проверяем каждый объект
-    for (final propertyWithBookings in _properties) {
+    for (final property in _properties.values) {
       try {
         // Получаем бронирования для текущего объекта (защита от null)
-        final bookings = _propertyBookings[propertyWithBookings.id] ?? [];
+        final bookings = _propertyBookings[property.id] ?? [];
 
         // Применяем фильтр
         List<Booking> filteredBookings = [];
@@ -729,7 +720,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
             break;
           case BookingFilterType.cleaning:
             // Для вкладки уборки проверяем статус объекта
-            if (propertyWithBookings.status == PropertyStatus.cleaning) {
+            if (property.status == PropertyStatus.cleaning) {
               // Также проверяем на наличие бронирований, которые завершены
               final completedBookings =
                   bookings
@@ -739,17 +730,14 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
               if (completedBookings.isNotEmpty) {
                 tempFilteredProperties.add(
                   PropertyWithBookings(
-                    property: propertyWithBookings.property,
+                    property: property,
                     bookings: completedBookings,
                   ),
                 );
               } else {
                 // Добавляем объект, даже если бронирований нет
                 tempFilteredProperties.add(
-                  PropertyWithBookings(
-                    property: propertyWithBookings.property,
-                    bookings: [],
-                  ),
+                  PropertyWithBookings(property: property, bookings: []),
                 );
               }
             }
@@ -760,15 +748,13 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
         if (filteredBookings.isNotEmpty) {
           tempFilteredProperties.add(
             PropertyWithBookings(
-              property: propertyWithBookings.property,
+              property: property,
               bookings: filteredBookings,
             ),
           );
         }
       } catch (e) {
-        debugPrint(
-          'Ошибка при фильтрации объекта ${propertyWithBookings.id}: $e',
-        );
+        debugPrint('Ошибка при фильтрации объекта ${property.id}: $e');
         // Пропускаем объект в случае ошибки
       }
     }
@@ -851,7 +837,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
                     style: TextStyle(
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.withValues(alpha: 179),
+                      ).colorScheme.onSurface.withAlpha(179),
                       fontSize: 16,
                     ),
                     textAlign: TextAlign.center,

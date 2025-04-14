@@ -7,6 +7,7 @@ import 'package:pater/data/services/cleaning_service.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/domain/entities/cleaning_request.dart';
 import 'package:pater/domain/entities/property.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран управления заявками на уборку для владельцев
 class CleaningRequestsScreen extends StatefulWidget {
@@ -20,8 +21,7 @@ class _CleaningRequestsScreenState extends State<CleaningRequestsScreen>
     with SingleTickerProviderStateMixin {
   final CleaningService _cleaningService = CleaningService();
   final PropertyService _propertyService = PropertyService();
-  final AuthService authService = AuthService();
-
+  late final AuthService _authService;
   late TabController _tabController;
 
   bool _isLoading = true;
@@ -42,6 +42,7 @@ class _CleaningRequestsScreenState extends State<CleaningRequestsScreen>
 
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(_handleTabChange);
+    _authService = getIt<AuthService>();
 
     _loadCleaningRequests();
   }
@@ -69,7 +70,7 @@ class _CleaningRequestsScreenState extends State<CleaningRequestsScreen>
 
     try {
       // Получаем ID пользователя
-      final userId = authService.currentUser?.id;
+      final userId = _authService.currentUser?.id;
       if (userId == null) {
         throw Exception('Пользователь не авторизован');
       }

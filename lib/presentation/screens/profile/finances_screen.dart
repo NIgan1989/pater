@@ -9,6 +9,7 @@ import 'package:pater/domain/entities/payment_receipt.dart';
 import 'package:pater/domain/entities/property.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Модель транзакции для отображения в истории
 class Transaction {
@@ -59,7 +60,7 @@ class _FinancesScreenState extends State<FinancesScreen>
     with SingleTickerProviderStateMixin {
   final BookingService _bookingService = BookingService();
   final PropertyService _propertyService = PropertyService();
-  final AuthService _authService = AuthService();
+  late final AuthService _authService;
   final PaymentService _paymentService = PaymentService();
 
   late TabController _tabController;
@@ -95,6 +96,7 @@ class _FinancesScreenState extends State<FinancesScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _authService = getIt<AuthService>();
     _user = _authService.currentUser;
     _loadData();
   }

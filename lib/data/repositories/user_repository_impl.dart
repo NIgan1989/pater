@@ -1,6 +1,7 @@
 import 'package:pater/domain/entities/user.dart';
 import 'package:pater/domain/repositories/user_repository.dart';
 import 'package:pater/data/datasources/user_service.dart';
+import 'package:pater/domain/entities/user_role.dart';
 
 class UserRepositoryImpl implements UserRepository {
   final UserService _userService;
@@ -65,7 +66,9 @@ class UserRepositoryImpl implements UserRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getReviewsByCleanerId(String cleanerId) async {
+  Future<List<Map<String, dynamic>>> getReviewsByCleanerId(
+    String cleanerId,
+  ) async {
     return _userService.getReviewsByCleanerId(cleanerId);
   }
 
@@ -75,7 +78,10 @@ class UserRepositoryImpl implements UserRepository {
   }
 
   @override
-  Future<bool> updateUserProfile(String userId, Map<String, dynamic> userData) async {
+  Future<bool> updateUserProfile(
+    String userId,
+    Map<String, dynamic> userData,
+  ) async {
     return _userService.updateUserProfile(userId, userData);
   }
 
@@ -88,4 +94,4 @@ class UserRepositoryImpl implements UserRepository {
   Future<List<User>> getTopCleaners({int limit = 10}) async {
     return _userService.getTopCleaners(limit: limit);
   }
-} 
+}

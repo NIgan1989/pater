@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/presentation/widgets/common/error_message.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран для ввода SMS-кода
 class SmsCodeScreen extends StatefulWidget {
@@ -32,7 +33,7 @@ class _SmsCodeScreenState extends State<SmsCodeScreen> {
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
-  final _authService = AuthService();
+  late final AuthService _authService;
 
   String? _errorMessage;
 
@@ -42,6 +43,7 @@ class _SmsCodeScreenState extends State<SmsCodeScreen> {
   @override
   void initState() {
     super.initState();
+    _authService = getIt<AuthService>();
     _startResendTimer();
     _codeController.clear();
 
@@ -94,42 +96,19 @@ class _SmsCodeScreenState extends State<SmsCodeScreen> {
     });
 
     try {
-      await _authService.sendPhoneVerificationCode(
-        widget.phoneNumber,
-        (String newVerificationId) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Код отправлен'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
+      await _authService.signInWithPhoneNumber(widget.phoneNumber);
 
-            _startResendTimer();
-          }
-        },
-        (String message) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(message),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Код отправлен'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
 
-            context.go('/home');
-          }
-        },
-        (String errorMessage) {
-          if (mounted) {
-            setState(() {
-              _errorMessage = errorMessage;
-            });
-          }
-        },
-      );
+        _startResendTimer();
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -204,36 +183,24 @@ class _SmsCodeScreenState extends State<SmsCodeScreen> {
     }
 
     try {
-      // Получаем extra данные если они есть
-      final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
-      final selectedRole = extra?['selectedRole'] as String? ?? 'client';
-
-      // Проверяем код
-      final result = await _authService.verifyPhoneCode(
-        widget.verificationId,
-        smsCode,
-        widget.phoneNumber,
-        selectedRole,
-        widget.isRegistration,
-      );
+      // Используем существующий метод верификации
+      final result = await _authService.verifyPhoneNumber(smsCode);
 
       if (mounted) {
-        if (result['success'] == true) {
+        if (result != null) {
           // Если успешно, перенаправляем пользователя
           if (widget.isRegistration) {
             // Для новых пользователей переходим на экран создания PIN-кода
             context.go('/auth/create-pin');
           } else {
-            // Для существующих - на нужный экран в зависимости от PIN
-            final hasPin = result['has_pin'] as bool? ?? false;
-            if (hasPin) {
-              final userId = result['user_id'] as String? ?? '';
+            // Для существующих - проверяем наличие PIN
+            if (_authService.hasPinCode()) {
+              final userId = result.id;
 
               // Переходим на экран ввода PIN
               final pinData = {
                 'userId': userId,
                 'phoneNumber': widget.phoneNumber,
-                'selectedRole': selectedRole,
               };
               context.push('/auth/pin', extra: pinData);
             } else {
@@ -243,7 +210,7 @@ class _SmsCodeScreenState extends State<SmsCodeScreen> {
           }
         } else {
           setState(() {
-            _errorMessage = result['error'] as String? ?? 'Неверный код';
+            _errorMessage = 'Неверный код';
             _codeController.clear();
           });
         }

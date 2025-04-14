@@ -9,6 +9,7 @@ import 'package:pater/core/auth/account_manager.dart';
 import 'package:pater/core/auth/role_manager.dart';
 import 'package:pater/core/constants/app_constants.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран авторизации с помощью PIN-кода
 class PinAuthScreen extends StatefulWidget {
@@ -24,9 +25,9 @@ class PinAuthScreen extends StatefulWidget {
 
 class _PinAuthScreenState extends State<PinAuthScreen> {
   final _pinController = TextEditingController();
-  final _authService = AuthService();
-  final _accountManager = AccountManager();
-  final _roleManager = RoleManager();
+  late final AuthService _authService;
+  late final AccountManager _accountManager;
+  late final RoleManager _roleManager;
 
   late String _userId;
   late String _userName = '';
@@ -42,6 +43,11 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Инициализируем сервисы через GetIt
+    _authService = getIt<AuthService>();
+    _accountManager = getIt<AccountManager>();
+    _roleManager = getIt<RoleManager>();
 
     // Получаем параметры, переданные через конструктор или загружаем из SharedPreferences
     _loadUserInfo();
@@ -147,7 +153,7 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
       final pinCode = _pinController.text;
 
       // Проверяем PIN-код
-      final isValid = await _authService.checkPinCode(_userId, pinCode);
+      final isValid = await _authService.checkPinCode(pinCode);
 
       if (!mounted) return;
 
@@ -167,7 +173,7 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
       }
 
       // Выполняем вход
-      final success = await _authService.signInWithPinCode(_userId, pinCode);
+      final success = await _authService.signInWithPinCode(pinCode);
 
       if (!mounted) return;
 
@@ -185,36 +191,37 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
         final user = _authService.currentUser;
         if (user != null) {
           // Создаем аккаунт, если его еще нет в системе
-          final accountExists = await _accountManager.accountExists(
-            user.id,
-            user.role,
-          );
+          final accountExists = await _accountManager.accountExists(user.id);
 
           if (!accountExists) {
-            await _accountManager.createAccount(user, user.role);
+            await _accountManager.createAccount(
+              user.id,
+              user.role.toString().split('.').last,
+            );
           }
 
           // Создаем объект аккаунта для установки как последнего использованного
-          final account = await _accountManager.loadAccounts().then(
-            (accounts) => accounts.firstWhere(
-              (a) => a.userId == user.id && a.role == user.role,
-              orElse: () => throw Exception('Аккаунт не найден'),
-            ),
+          final accounts = await _accountManager.loadAccounts();
+          final account = accounts.firstWhere(
+            (a) =>
+                a['id'] == user.id &&
+                a['role'] == user.role.toString().split('.').last,
+            orElse: () => throw Exception('Аккаунт не найден'),
           );
 
           // Устанавливаем последний использованный аккаунт
-          await _accountManager.setLastAccount(account);
+          await _accountManager.setLastAccount(account['id']);
 
           // Проверяем, есть ли у пользователя разные роли
           final userRoles = await _roleManager.getUserRoles(user.id);
 
           // Устанавливаем активную роль
           if (userRoles.contains(user.role)) {
-            await _roleManager.setActiveRole(user.id, user.role);
+            await _roleManager.setActiveRole(user.role);
           } else if (userRoles.isNotEmpty) {
             // Если текущая роль пользователя не совпадает с сохраненными ролями,
             // устанавливаем первую доступную роль как активную
-            await _roleManager.setActiveRole(user.id, userRoles.first);
+            await _roleManager.setActiveRole(userRoles.first);
           }
         }
       } catch (e) {

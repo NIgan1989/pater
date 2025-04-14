@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/domain/entities/booking.dart';
 import 'package:pater/domain/entities/property.dart';
-import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user.dart' as domain;
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/data/services/cleaning_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,15 +11,20 @@ import 'package:flutter/foundation.dart';
 import 'package:pater/data/services/notification_service.dart';
 import 'package:pater/data/services/user_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Сервис для работы с бронированиями
 class BookingService {
   static final BookingService _instance = BookingService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final PropertyService _propertyService = PropertyService();
+  PropertyService _propertyService = PropertyService();
   final bool _isInitialized = false;
+  late final AuthService _authService;
+  late final NotificationService _notificationService;
+  final CleaningService _cleaningService = CleaningService();
 
+  // Приватный конструктор
   BookingService._internal();
 
   /// Фабричный конструктор
@@ -27,21 +32,23 @@ class BookingService {
     return _instance;
   }
 
-  // Зависимости
-  final AuthService _authService = AuthService();
+  /// Инициализирует сервис и его зависимости
+  Future<void> initializeDependencies() async {
+    // Инициализируем PropertyService через GetIt
+    _propertyService = getIt<PropertyService>();
 
-  final NotificationService _notificationService = NotificationService();
-  final CleaningService _cleaningService = CleaningService();
+    // Инициализируем AuthService через GetIt
+    _authService = getIt<AuthService>();
+
+    // Инициализируем NotificationService через GetIt
+    _notificationService = getIt<NotificationService>();
+  }
 
   /// Инициализирует сервис
   Future<void> init() async {
     try {
-      // Инициализируем сервис объектов недвижимости
-      final propertyService = PropertyService();
-      await propertyService.init();
-
-      // Создание тестовых данных отключено
-      // await propertyService.createFirebaseStructureIfNeeded();
+      // Инициализируем зависимости
+      await initializeDependencies();
 
       // Проверяем, существует ли коллекция bookings
       final bookingsSnapshot =
@@ -59,7 +66,7 @@ class BookingService {
     await _ensureInitialized();
 
     try {
-      final userId = await _authService.getUserId();
+      final userId = _authService.getUserId();
       if (userId == null || userId.isEmpty) {
         throw Exception('Пользователь не авторизован');
       }
@@ -182,7 +189,7 @@ class BookingService {
     await _ensureInitialized();
 
     try {
-      final userId = await _authService.getUserId();
+      final userId = _authService.getUserId();
       if (userId == null || userId.isEmpty) {
         throw Exception('Пользователь не авторизован');
       }
@@ -234,7 +241,7 @@ class BookingService {
     await _ensureInitialized();
 
     // Проверяем авторизацию и пытаемся восстановить сессию при необходимости
-    User? user = _authService.currentUser;
+    domain.User? user = _authService.currentUser;
     if (user == null) {
       debugPrint(
         'BookingService: Пользователь не авторизован, пытаемся восстановить сессию',
@@ -255,7 +262,7 @@ class BookingService {
         }
 
         // Восстанавливаем сессию
-        final restored = await _authService.restoreUserSession(savedUserId);
+        final restored = await _authService.restoreUserSessionById(savedUserId);
         if (restored) {
           debugPrint(
             'BookingService: Сессия пользователя успешно восстановлена',

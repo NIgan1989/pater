@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:pater/core/constants/app_constants.dart';
-import 'package:pater/domain/entities/booking.dart';
-import 'package:pater/domain/entities/property.dart';
-import 'package:pater/data/services/booking_service.dart';
-import 'package:pater/data/services/property_service.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
+import 'package:pater/core/constants/app_constants.dart';
+import 'package:pater/data/services/booking_service.dart';
+import 'package:pater/data/services/property_service.dart';
+import 'package:pater/domain/entities/booking.dart';
+import 'package:pater/domain/entities/property.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
-import 'package:pater/domain/entities/user.dart';
 import 'package:pater/presentation/widgets/bookings/universal_booking_card.dart';
+import 'package:pater/domain/entities/user_role.dart';
 
 /// Экран календаря бронирований для владельца
 class BookingCalendarScreen extends StatefulWidget {

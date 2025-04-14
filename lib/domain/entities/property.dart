@@ -4,164 +4,171 @@ import 'package:equatable/equatable.dart';
 enum PropertyStatus {
   /// Доступно для бронирования
   available,
-  
+
   /// Забронировано
   booked,
-  
+
   /// На уборке
   cleaning,
-  
+
   /// На ремонте
   maintenance,
-  
+
   /// Недоступен
   unavailable,
-  
+
   /// Заблокирован
-  blocked
+  blocked,
+
+  /// Архивирован
+  archived,
 }
 
 /// Подстатусы объекта недвижимости для детального отслеживания процесса
 class PropertySubStatus {
   static const String none = 'none';
-  static const String pendingRequest = 'pending_request';       // Ожидает подтверждения бронирования
-  static const String approvedPendingPayment = 'approved_pending_payment'; // Подтверждено, ожидает оплаты
-  static const String waitingPayment = 'waiting_payment';       // Ожидает оплаты (для обратной совместимости)
-  static const String waitingCleaning = 'waiting_cleaning';     // Ожидает уборки
-  static const String pendingCleaningRequest = 'pending_cleaning_request'; // Ожидает подтверждения уборки
+  static const String pendingRequest =
+      'pending_request'; // Ожидает подтверждения бронирования
+  static const String approvedPendingPayment =
+      'approved_pending_payment'; // Подтверждено, ожидает оплаты
+  static const String waitingPayment =
+      'waiting_payment'; // Ожидает оплаты (для обратной совместимости)
+  static const String waitingCleaning = 'waiting_cleaning'; // Ожидает уборки
+  static const String pendingCleaningRequest =
+      'pending_cleaning_request'; // Ожидает подтверждения уборки
 }
 
 /// Тип объекта недвижимости
 enum PropertyType {
   /// Квартира
   apartment,
-  
+
   /// Дом
   house,
-  
+
   /// Комната
   room,
-  
+
   /// Хостел
-  hostel
+  hostel,
 }
 
 /// Класс, представляющий объект недвижимости в системе
 class Property extends Equatable {
   /// Уникальный идентификатор объекта
   final String id;
-  
+
   /// Название объекта
   final String title;
-  
+
   /// Описание объекта
   final String description;
-  
+
   /// Идентификатор владельца
   final String ownerId;
-  
+
   /// Тип объекта
   final PropertyType type;
-  
+
   /// Статус объекта
   final PropertyStatus status;
-  
+
   /// Подстатус объекта для более детального отслеживания
   final String subStatus;
-  
+
   /// Время окончания бронирования для таймера обратного отсчета
   final DateTime? bookingEndTime;
-  
+
   /// ID текущего активного бронирования
   final String? bookingId;
-  
+
   /// URL изображений объекта
   final List<String> imageUrls;
-  
+
   /// Основное изображение объекта
   final String imageUrl;
-  
+
   /// Адрес объекта
   final String address;
-  
+
   /// Город
   final String city;
-  
+
   /// Страна
   final String country;
-  
+
   /// Географическая широта
   final double latitude;
-  
+
   /// Географическая долгота
   final double longitude;
-  
+
   /// Цена за ночь (в тенге)
   final double pricePerNight;
-  
+
   /// Цена за час (в тенге)
   final double pricePerHour;
-  
+
   /// Площадь объекта (в кв. метрах)
   final double area;
-  
+
   /// Количество комнат
   final int rooms;
-  
+
   /// Количество ванных комнат
   final int bathrooms;
-  
+
   /// Максимальное количество гостей
   final int maxGuests;
-  
+
   /// Флаг добавления в избранное
   final bool isFavorite;
-  
+
   /// Наличие Wi-Fi
   final bool hasWifi;
-  
+
   /// Наличие кондиционера
   final bool hasAirConditioning;
-  
+
   /// Наличие кухни
   final bool hasKitchen;
-  
+
   /// Наличие телевизора
   final bool hasTV;
-  
+
   /// Наличие стиральной машины
   final bool hasWashingMachine;
-  
+
   /// Наличие парковки
   final bool hasParking;
-  
+
   /// Разрешены ли домашние животные
   final bool petFriendly;
-  
+
   /// Время заселения (формат: чч:мм)
   final String checkInTime;
-  
+
   /// Время выселения (формат: чч:мм)
   final String checkOutTime;
-  
+
   /// Рейтинг объекта (от 0 до 5)
   final double rating;
-  
+
   /// Количество отзывов об объекте
   final int reviewsCount;
-  
+
   /// Является ли объект рекомендуемым/избранным
   final bool isFeatured;
-  
+
   /// Находится ли объект на модерации
   final bool isOnModeration;
-  
+
   /// Активен ли объект (доступен для бронирования)
   final bool isActive;
-  
+
   /// Количество просмотров объекта
   final int views;
-  
+
   /// Создает экземпляр [Property]
   const Property({
     required this.id,
@@ -203,22 +210,22 @@ class Property extends Equatable {
     this.isActive = true,
     this.views = 0,
   });
-  
+
   /// Получить цену за ночь (для совместимости с кодом)
   double get price => pricePerNight;
-  
+
   /// Получить количество комнат
   int get roomCount => rooms;
-  
+
   /// Получить количество ванных комнат
   int get bathroomCount => bathrooms;
-  
+
   /// Получить максимальное количество гостей
   int get guestCount => maxGuests;
-  
+
   /// Получить количество спален (предполагаем, что количество спален равно количеству комнат - 1)
   int get bedroomCount => rooms > 1 ? rooms - 1 : 1;
-  
+
   /// Создает копию объекта с измененными параметрами
   Property copyWith({
     String? id,
@@ -301,7 +308,7 @@ class Property extends Equatable {
       views: views ?? this.views,
     );
   }
-  
+
   @override
   List<Object?> get props => [
     id,
@@ -343,7 +350,7 @@ class Property extends Equatable {
     isActive,
     views,
   ];
-  
+
   /// Преобразует объект в Map для сохранения в Firestore
   Map<String, dynamic> toMap() {
     return {
@@ -386,14 +393,16 @@ class Property extends Equatable {
       'views': views,
     };
   }
-  
+
   /// Создает объект Property из Map
   factory Property.fromMap(Map<String, dynamic> map) {
     DateTime? bookingEndTime;
     if (map['booking_end_time'] != null) {
-      bookingEndTime = DateTime.fromMillisecondsSinceEpoch(map['booking_end_time'] as int);
+      bookingEndTime = DateTime.fromMillisecondsSinceEpoch(
+        map['booking_end_time'] as int,
+      );
     }
-    
+
     return Property(
       id: map['id'] ?? '',
       title: map['title'] ?? '',
@@ -434,7 +443,7 @@ class Property extends Equatable {
       views: map['views'] ?? 0,
     );
   }
-  
+
   /// Преобразует строку в тип объекта недвижимости
   static PropertyType _stringToPropertyType(String type) {
     switch (type) {
@@ -450,7 +459,7 @@ class Property extends Equatable {
         return PropertyType.apartment;
     }
   }
-  
+
   /// Преобразует строку в статус объекта недвижимости
   static PropertyStatus _stringToPropertyStatus(String status) {
     switch (status) {
@@ -466,15 +475,17 @@ class Property extends Equatable {
         return PropertyStatus.unavailable;
       case 'blocked':
         return PropertyStatus.blocked;
+      case 'archived':
+        return PropertyStatus.archived;
       default:
         return PropertyStatus.available;
     }
   }
-  
+
   /// Список удобств объекта
   List<String> get amenities {
     final list = <String>[];
-    
+
     if (hasWifi) list.add('Wi-Fi');
     if (hasAirConditioning) list.add('Кондиционер');
     if (hasKitchen) list.add('Кухня');
@@ -482,10 +493,10 @@ class Property extends Equatable {
     if (hasWashingMachine) list.add('Стиральная машина');
     if (hasParking) list.add('Парковка');
     if (petFriendly) list.add('Разрешены животные');
-    
+
     return list;
   }
-  
+
   /// Преобразует объект в карту для JSON
   Map<String, dynamic> toJson() {
     return {
@@ -529,18 +540,24 @@ class Property extends Equatable {
       'views': views,
     };
   }
-  
+
   /// Создает объект из JSON
   factory Property.fromJson(Map<String, dynamic> json) {
     // Обрабатываем поля из Firestore (snake_case) и из локальных объектов (camelCase)
     DateTime? bookingEndTime;
-    
-    if (json.containsKey('booking_end_time') && json['booking_end_time'] != null) {
-      bookingEndTime = DateTime.fromMillisecondsSinceEpoch(json['booking_end_time'] as int);
-    } else if (json.containsKey('bookingEndTime') && json['bookingEndTime'] != null) {
-      bookingEndTime = DateTime.fromMillisecondsSinceEpoch(json['bookingEndTime'] as int);
+
+    if (json.containsKey('booking_end_time') &&
+        json['booking_end_time'] != null) {
+      bookingEndTime = DateTime.fromMillisecondsSinceEpoch(
+        json['booking_end_time'] as int,
+      );
+    } else if (json.containsKey('bookingEndTime') &&
+        json['bookingEndTime'] != null) {
+      bookingEndTime = DateTime.fromMillisecondsSinceEpoch(
+        json['bookingEndTime'] as int,
+      );
     }
-    
+
     return Property(
       id: json['id'] as String,
       title: json['title'] as String? ?? '',
@@ -548,71 +565,96 @@ class Property extends Equatable {
       ownerId: json['owner_id'] as String? ?? json['ownerId'] as String? ?? '',
       type: _parsePropertyType(json['type'] as String? ?? ''),
       status: _parsePropertyStatus(json['status'] as String? ?? ''),
-      subStatus: json['sub_status'] as String? ?? json['subStatus'] as String? ?? PropertySubStatus.none,
+      subStatus:
+          json['sub_status'] as String? ??
+          json['subStatus'] as String? ??
+          PropertySubStatus.none,
       bookingEndTime: bookingEndTime,
       bookingId: json['booking_id'] as String? ?? '',
-      imageUrls: json.containsKey('image_urls')
-          ? (json['image_urls'] as List<dynamic>?)?.map((e) => e as String).toList() ?? []
-          : (json['imageUrls'] as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
-      imageUrl: json['image_url'] as String? ?? json['imageUrl'] as String? ?? '',
+      imageUrls:
+          json.containsKey('image_urls')
+              ? (json['image_urls'] as List<dynamic>?)
+                      ?.map((e) => e as String)
+                      .toList() ??
+                  []
+              : (json['imageUrls'] as List<dynamic>?)
+                      ?.map((e) => e as String)
+                      .toList() ??
+                  [],
+      imageUrl:
+          json['image_url'] as String? ?? json['imageUrl'] as String? ?? '',
       address: json['address'] as String? ?? '',
       city: json['city'] as String? ?? '',
       country: json['country'] as String? ?? '',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
-      pricePerNight: json.containsKey('price_per_night')
-          ? (json['price_per_night'] as num?)?.toDouble() ?? 0.0
-          : (json['pricePerNight'] as num?)?.toDouble() ?? 0.0,
-      pricePerHour: json.containsKey('price_per_hour')
-          ? (json['price_per_hour'] as num?)?.toDouble() ?? 0.0
-          : (json['pricePerHour'] as num?)?.toDouble() ?? 0.0,
+      pricePerNight:
+          json.containsKey('price_per_night')
+              ? (json['price_per_night'] as num?)?.toDouble() ?? 0.0
+              : (json['pricePerNight'] as num?)?.toDouble() ?? 0.0,
+      pricePerHour:
+          json.containsKey('price_per_hour')
+              ? (json['price_per_hour'] as num?)?.toDouble() ?? 0.0
+              : (json['pricePerHour'] as num?)?.toDouble() ?? 0.0,
       area: (json['area'] as num?)?.toDouble() ?? 0.0,
       rooms: json['rooms'] as int? ?? 1,
       bathrooms: json['bathrooms'] as int? ?? 1,
-      maxGuests: json.containsKey('max_guests')
-          ? json['max_guests'] as int? ?? 1
-          : json['maxGuests'] as int? ?? 1,
+      maxGuests:
+          json.containsKey('max_guests')
+              ? json['max_guests'] as int? ?? 1
+              : json['maxGuests'] as int? ?? 1,
       isFavorite: json['isFavorite'] as bool? ?? false,
-      hasWifi: json.containsKey('has_wifi')
-          ? json['has_wifi'] as bool? ?? false
-          : json['hasWifi'] as bool? ?? false,
-      hasAirConditioning: json.containsKey('has_air_conditioning')
-          ? json['has_air_conditioning'] as bool? ?? false
-          : json['hasAirConditioning'] as bool? ?? false,
-      hasKitchen: json.containsKey('has_kitchen')
-          ? json['has_kitchen'] as bool? ?? false
-          : json['hasKitchen'] as bool? ?? false,
-      hasTV: json.containsKey('has_tv')
-          ? json['has_tv'] as bool? ?? false
-          : json['hasTV'] as bool? ?? false,
-      hasWashingMachine: json.containsKey('has_washing_machine')
-          ? json['has_washing_machine'] as bool? ?? false
-          : json['hasWashingMachine'] as bool? ?? false,
-      hasParking: json.containsKey('has_parking')
-          ? json['has_parking'] as bool? ?? false
-          : json['hasParking'] as bool? ?? false,
-      petFriendly: json.containsKey('pet_friendly')
-          ? json['pet_friendly'] as bool? ?? false
-          : json['petFriendly'] as bool? ?? false,
-      checkInTime: json.containsKey('check_in_time')
-          ? json['check_in_time'] as String? ?? '14:00'
-          : json['checkInTime'] as String? ?? '14:00',
-      checkOutTime: json.containsKey('check_out_time')
-          ? json['check_out_time'] as String? ?? '12:00'
-          : json['checkOutTime'] as String? ?? '12:00',
+      hasWifi:
+          json.containsKey('has_wifi')
+              ? json['has_wifi'] as bool? ?? false
+              : json['hasWifi'] as bool? ?? false,
+      hasAirConditioning:
+          json.containsKey('has_air_conditioning')
+              ? json['has_air_conditioning'] as bool? ?? false
+              : json['hasAirConditioning'] as bool? ?? false,
+      hasKitchen:
+          json.containsKey('has_kitchen')
+              ? json['has_kitchen'] as bool? ?? false
+              : json['hasKitchen'] as bool? ?? false,
+      hasTV:
+          json.containsKey('has_tv')
+              ? json['has_tv'] as bool? ?? false
+              : json['hasTV'] as bool? ?? false,
+      hasWashingMachine:
+          json.containsKey('has_washing_machine')
+              ? json['has_washing_machine'] as bool? ?? false
+              : json['hasWashingMachine'] as bool? ?? false,
+      hasParking:
+          json.containsKey('has_parking')
+              ? json['has_parking'] as bool? ?? false
+              : json['hasParking'] as bool? ?? false,
+      petFriendly:
+          json.containsKey('pet_friendly')
+              ? json['pet_friendly'] as bool? ?? false
+              : json['petFriendly'] as bool? ?? false,
+      checkInTime:
+          json.containsKey('check_in_time')
+              ? json['check_in_time'] as String? ?? '14:00'
+              : json['checkInTime'] as String? ?? '14:00',
+      checkOutTime:
+          json.containsKey('check_out_time')
+              ? json['check_out_time'] as String? ?? '12:00'
+              : json['checkOutTime'] as String? ?? '12:00',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
       reviewsCount: json['reviewsCount'] as int? ?? 0,
-      isFeatured: json.containsKey('is_featured')
-          ? json['is_featured'] as bool? ?? false
-          : json['isFeatured'] as bool? ?? false,
+      isFeatured:
+          json.containsKey('is_featured')
+              ? json['is_featured'] as bool? ?? false
+              : json['isFeatured'] as bool? ?? false,
       isOnModeration: json['isOnModeration'] as bool? ?? false,
-      isActive: json.containsKey('is_active')
-          ? json['is_active'] as bool? ?? true
-          : json['isActive'] as bool? ?? true,
+      isActive:
+          json.containsKey('is_active')
+              ? json['is_active'] as bool? ?? true
+              : json['isActive'] as bool? ?? true,
       views: json['views'] as int? ?? 0,
     );
   }
-  
+
   /// Парсит тип объекта из строки
   static PropertyType _parsePropertyType(String typeStr) {
     if (typeStr.isEmpty) {
@@ -623,7 +665,7 @@ class Property extends Equatable {
       orElse: () => PropertyType.apartment,
     );
   }
-  
+
   /// Парсит статус объекта из строки
   static PropertyStatus _parsePropertyStatus(String statusStr) {
     if (statusStr.isEmpty) {
@@ -634,4 +676,4 @@ class Property extends Equatable {
       orElse: () => PropertyStatus.available,
     );
   }
-} 
+}

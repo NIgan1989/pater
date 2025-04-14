@@ -10,6 +10,7 @@ import 'package:pater/data/services/user_service.dart';
 import 'package:pater/domain/entities/booking.dart';
 import 'package:pater/domain/entities/property.dart';
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 import 'package:pater/presentation/widgets/bookings/booking_status_badge.dart';
 import 'package:pater/presentation/widgets/property/property_image_carousel.dart';
 import 'package:pater/presentation/widgets/bookings/booking_timer.dart';

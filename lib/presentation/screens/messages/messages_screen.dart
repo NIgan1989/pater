@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:get_it/get_it.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/core/constants/app_constants.dart';
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 import 'package:pater/presentation/widgets/common/app_button.dart';
 import 'package:pater/data/services/messaging_service.dart';
 
@@ -16,7 +18,7 @@ class MessagesScreen extends StatefulWidget {
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
-  final AuthService _authService = AuthService();
+  final _authService = GetIt.instance.get<AuthService>();
   final MessagingService _messagingService = MessagingService();
 
   late User? _user;

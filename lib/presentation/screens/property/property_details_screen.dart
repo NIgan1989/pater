@@ -8,6 +8,7 @@ import 'package:pater/data/services/property_service.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/presentation/widgets/map/property_map.dart';
 import 'package:pater/core/theme/app_text_styles.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран отображения подробной информации о жилье
 class PropertyDetailsScreen extends StatefulWidget {
@@ -25,7 +26,8 @@ class PropertyDetailsScreen extends StatefulWidget {
 }
 
 class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
-  final PropertyService _propertyService = PropertyService();
+  late final PropertyService _propertyService;
+  late final AuthService _authService;
   Property? _property;
   bool _isLoading = true;
   bool _isFavorite = false;
@@ -41,6 +43,10 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       'PropertyDetailsScreen: Объект передан: ${widget.property != null}',
     );
 
+    // Инициализируем сервисы через GetIt
+    _propertyService = getIt<PropertyService>();
+    _authService = getIt<AuthService>();
+
     if (widget.property != null) {
       debugPrint(
         'PropertyDetailsScreen: Используем переданный объект: ${widget.property!.title}',
@@ -55,22 +61,22 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
-  /// Проверяет, находится ли объект в избранном
+  /// Проверяет, добавлено ли жилье в избранное
   Future<void> _checkFavoriteStatus() async {
     if (_property == null) return;
 
-    final authService = AuthService();
-    if (authService.currentUser == null) return;
+    if (_authService.currentUser == null) return;
 
     try {
-      final propertyService = PropertyService();
-      _isFavorite = await propertyService.isPropertyInFavorites(
-        authService.currentUser!.id,
+      final isFavorite = await _authService.isPropertyInFavorites(
+        _authService.currentUser!.id,
         _property!.id,
       );
 
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _isFavorite = isFavorite;
+        });
       }
     } catch (e) {
       debugPrint('Ошибка при проверке статуса избранного: $e');
@@ -192,93 +198,51 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
 
   /// Обрабатывает добавление/удаление из избранного
   Future<void> _toggleFavorite() async {
-    final authService = AuthService();
+    final authService = getIt<AuthService>();
 
     // Если пользователь не авторизован, перенаправляем на экран входа
     if (authService.currentUser == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Войдите в аккаунт, чтобы добавить в избранное'),
+            content: Text(
+              'Для добавления в избранное необходимо авторизоваться',
+            ),
           ),
         );
-
-        // Перенаправляем на экран входа
-        context.push('/auth');
       }
       return;
     }
 
-    // Показываем индикатор загрузки в SnackBar
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                _isFavorite
-                    ? 'Удаляем из избранного...'
-                    : 'Добавляем в избранное...',
-              ),
-            ],
-          ),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    }
+    if (_property == null) return;
+
+    // Меняем локальное состояние для мгновенной обратной связи
+    setState(() {
+      _isFavorite = !_isFavorite;
+    });
 
     try {
-      final propertyService = PropertyService();
-
       // Меняем состояние избранного
-      final newFavoriteState = !_isFavorite;
-
-      if (mounted) {
-        setState(() {
-          _isFavorite = newFavoriteState;
-        });
-      }
+      final newFavoriteState = _isFavorite;
 
       if (newFavoriteState) {
-        await propertyService.addToFavorites(
+        await _propertyService.addToFavorites(
           authService.currentUser!.id,
           _property!.id,
         );
       } else {
-        await propertyService.removeFromFavorites(
+        await _propertyService.removeFromFavorites(
           authService.currentUser!.id,
           _property!.id,
         );
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              newFavoriteState
-                  ? 'Объект добавлен в избранное'
-                  : 'Объект удален из избранного',
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
     } catch (e) {
-      // При ошибке возвращаем предыдущее состояние
-      if (mounted) {
-        setState(() {
-          _isFavorite = !_isFavorite;
-        });
+      // В случае ошибки возвращаем предыдущее состояние
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
 
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
         );
@@ -785,7 +749,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   /// Строит нижнюю панель с ценой и кнопкой бронирования
   Widget _buildBookingBar(ThemeData theme, bool isDesktop) {
     // Получаем текущего пользователя
-    final authService = AuthService();
+    final authService = getIt<AuthService>();
     final currentUser = authService.currentUser;
 
     // Проверяем, является ли текущий пользователь владельцем этого объекта

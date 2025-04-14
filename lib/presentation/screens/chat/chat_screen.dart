@@ -2,62 +2,62 @@ import 'package:flutter/material.dart';
 import 'package:pater/core/constants/app_constants.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/domain/entities/user.dart';
+import 'package:pater/domain/entities/user_role.dart';
 import 'package:intl/intl.dart';
+import 'package:pater/core/di/service_locator.dart';
 
 /// Экран чата с конкретным пользователем
 class ChatScreen extends StatefulWidget {
   final String chatId;
-  
-  const ChatScreen({
-    super.key,
-    required this.chatId,
-  });
+
+  const ChatScreen({super.key, required this.chatId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final AuthService _authService = AuthService();
+  // Получаем AuthService через GetIt
+  final AuthService _authService = getIt<AuthService>();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
+
   late User? _currentUser;
   bool _isLoading = true;
   List<ChatMessage> _messages = [];
   User? _chatPartner;
-  
+
   @override
   void initState() {
     super.initState();
     _currentUser = _authService.currentUser;
     _loadChatData();
   }
-  
+
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
-  
+
   /// Загружает данные чата
   Future<void> _loadChatData() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       // Имитация загрузки данных
       await Future.delayed(const Duration(milliseconds: 800));
-      
+
       // Создаем тестовые данные
       _generateTestData();
-      
+
       setState(() {
         _isLoading = false;
       });
-      
+
       // Прокручиваем к последнему сообщению
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
@@ -72,7 +72,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _isLoading = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -83,11 +83,11 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
   }
-  
+
   /// Генерирует тестовые данные для чата
   void _generateTestData() {
     // Создаем тестового собеседника
-    _chatPartner = User(
+    _chatPartner = User.simplified(
       id: widget.chatId,
       email: 'user${widget.chatId}@example.com',
       firstName: 'Пользователь',
@@ -95,10 +95,10 @@ class _ChatScreenState extends State<ChatScreen> {
       phoneNumber: '+7777777777${widget.chatId}',
       role: UserRole.client,
     );
-    
+
     // Создаем тестовые сообщения
     final now = DateTime.now();
-    
+
     _messages = [
       ChatMessage(
         id: '1',
@@ -158,12 +158,12 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     ];
   }
-  
+
   /// Отправляет новое сообщение
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
-    
+
     setState(() {
       _messages.add(
         ChatMessage(
@@ -175,10 +175,10 @@ class _ChatScreenState extends State<ChatScreen> {
           isRead: false,
         ),
       );
-      
+
       _messageController.clear();
     });
-    
+
     // Прокручиваем к последнему сообщению
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -190,16 +190,17 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
-        title: _isLoading
-            ? const Text('Загрузка...')
-            : Text(_chatPartner?.fullName ?? 'Чат'),
+        title:
+            _isLoading
+                ? const Text('Загрузка...')
+                : Text(_chatPartner?.fullName ?? 'Чат'),
         centerTitle: true,
         actions: [
           IconButton(
@@ -210,102 +211,120 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // Сообщения
-                Expanded(
-                  child: _messages.isEmpty
-                      ? Center(
-                          child: Text(
-                            'Нет сообщений',
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(AppConstants.paddingM),
-                          itemCount: _messages.length,
-                          itemBuilder: (context, index) {
-                            final message = _messages[index];
-                            final isCurrentUser = message.senderId == _currentUser!.id;
-                            
-                            // Проверяем, нужно ли показывать дату
-                            final showDate = index == 0 || 
-                                !_isSameDay(
-                                  _messages[index].timestamp,
-                                  _messages[index - 1].timestamp,
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                children: [
+                  // Сообщения
+                  Expanded(
+                    child:
+                        _messages.isEmpty
+                            ? Center(
+                              child: Text(
+                                'Нет сообщений',
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                              ),
+                            )
+                            : ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.all(
+                                AppConstants.paddingM,
+                              ),
+                              itemCount: _messages.length,
+                              itemBuilder: (context, index) {
+                                final message = _messages[index];
+                                final isCurrentUser =
+                                    message.senderId == _currentUser!.id;
+
+                                // Проверяем, нужно ли показывать дату
+                                final showDate =
+                                    index == 0 ||
+                                    !_isSameDay(
+                                      _messages[index].timestamp,
+                                      _messages[index - 1].timestamp,
+                                    );
+
+                                return Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (showDate)
+                                      _buildDateDivider(
+                                        theme,
+                                        message.timestamp,
+                                      ),
+                                    _buildMessageBubble(
+                                      theme,
+                                      message,
+                                      isCurrentUser,
+                                    ),
+                                  ],
                                 );
-                            
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (showDate)
-                                  _buildDateDivider(theme, message.timestamp),
-                                _buildMessageBubble(theme, message, isCurrentUser),
-                              ],
-                            );
+                              },
+                            ),
+                  ),
+
+                  // Поле ввода сообщения
+                  Container(
+                    padding: const EdgeInsets.all(AppConstants.paddingM),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.attach_file),
+                          onPressed: () {
+                            // Прикрепить файл
                           },
                         ),
-                ),
-                
-                // Поле ввода сообщения
-                Container(
-                  padding: const EdgeInsets.all(AppConstants.paddingM),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.attach_file),
-                        onPressed: () {
-                          // Прикрепить файл
-                        },
-                      ),
-                      Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          decoration: InputDecoration(
-                            hintText: 'Введите сообщение...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppConstants.radiusL),
-                              borderSide: BorderSide.none,
+                        Expanded(
+                          child: TextField(
+                            controller: _messageController,
+                            decoration: InputDecoration(
+                              hintText: 'Введите сообщение...',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppConstants.radiusL,
+                                ),
+                                borderSide: BorderSide.none,
+                              ),
+                              filled: true,
+                              fillColor: theme.colorScheme.surface,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.paddingM,
+                                vertical: AppConstants.paddingS,
+                              ),
                             ),
-                            filled: true,
-                            fillColor: theme.colorScheme.surface,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: AppConstants.paddingM,
-                              vertical: AppConstants.paddingS,
-                            ),
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _sendMessage(),
                           ),
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => _sendMessage(),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.send),
-                        color: theme.colorScheme.primary,
-                        onPressed: _sendMessage,
-                      ),
-                    ],
+                        IconButton(
+                          icon: const Icon(Icons.send),
+                          color: theme.colorScheme.primary,
+                          onPressed: _sendMessage,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
     );
   }
-  
+
   /// Строит разделитель с датой
   Widget _buildDateDivider(ThemeData theme, DateTime date) {
     return Container(
@@ -318,7 +337,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingM),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.paddingM,
+            ),
             child: Text(
               _formatMessageDate(date),
               style: TextStyle(
@@ -336,9 +357,13 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
-  
+
   /// Строит пузырек сообщения
-  Widget _buildMessageBubble(ThemeData theme, ChatMessage message, bool isCurrentUser) {
+  Widget _buildMessageBubble(
+    ThemeData theme,
+    ChatMessage message,
+    bool isCurrentUser,
+  ) {
     return Container(
       margin: EdgeInsets.only(
         top: AppConstants.paddingS,
@@ -348,14 +373,16 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
-        crossAxisAlignment: isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment:
+            isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(AppConstants.paddingM),
             decoration: BoxDecoration(
-              color: isCurrentUser
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.surface,
+              color:
+                  isCurrentUser
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(AppConstants.radiusM),
               boxShadow: [
                 BoxShadow(
@@ -368,9 +395,10 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Text(
               message.text,
               style: TextStyle(
-                color: isCurrentUser
-                    ? theme.colorScheme.onPrimary
-                    : theme.colorScheme.onSurface,
+                color:
+                    isCurrentUser
+                        ? theme.colorScheme.onPrimary
+                        : theme.colorScheme.onSurface,
               ),
             ),
           ),
@@ -395,9 +423,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   Icon(
                     message.isRead ? Icons.done_all : Icons.done,
                     size: 12,
-                    color: message.isRead
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    color:
+                        message.isRead
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
                   ),
                 ],
               ],
@@ -407,14 +438,14 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
-  
+
   /// Форматирует дату сообщения
   String _formatMessageDate(DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = DateTime(now.year, now.month, now.day - 1);
     final messageDate = DateTime(date.year, date.month, date.day);
-    
+
     if (messageDate == today) {
       return 'Сегодня';
     } else if (messageDate == yesterday) {
@@ -423,12 +454,12 @@ class _ChatScreenState extends State<ChatScreen> {
       return DateFormat('d MMMM').format(date);
     }
   }
-  
+
   /// Проверяет, относятся ли две даты к одному дню
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&
-           date1.month == date2.month &&
-           date1.day == date2.day;
+        date1.month == date2.month &&
+        date1.day == date2.day;
   }
 }
 
@@ -440,7 +471,7 @@ class ChatMessage {
   final String text;
   final DateTime timestamp;
   final bool isRead;
-  
+
   ChatMessage({
     required this.id,
     required this.senderId,
@@ -449,4 +480,4 @@ class ChatMessage {
     required this.timestamp,
     required this.isRead,
   });
-} 
+}

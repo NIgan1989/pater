@@ -5,6 +5,7 @@ import 'package:pater/core/auth/account_manager.dart';
 import 'package:pater/core/constants/app_constants.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
+import 'package:get_it/get_it.dart';
 import 'dart:math' as math;
 
 /// Экран авторизации в приложении
@@ -19,7 +20,7 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
-  final _authService = AuthService();
+  final _authService = GetIt.instance.get<AuthService>();
   final _accountManager = AccountManager();
 
   bool _isLoading = false;
@@ -54,21 +55,20 @@ class _AuthScreenState extends State<AuthScreen> {
       debugPrint('Проверка номера телефона: $phoneNumber');
 
       // Проверяем, существует ли пользователь с таким номером
-      final userInfo = await _authService.checkUserExistsByPhone(phoneNumber);
-      final userExists = userInfo != null && userInfo['exists'] == true;
+      final userExists = await _authService.checkUserExistsByPhone(phoneNumber);
 
       if (userExists) {
         debugPrint('Пользователь существует, перенаправляем на экран PIN-кода');
 
         // Выполняем вход по номеру телефона без SMS
-        final user = await _authService.signInByPhoneNumber(phoneNumber);
+        final user = await _authService.signInWithPhoneNumber(phoneNumber);
 
         if (user == null) {
           throw Exception('Ошибка при авторизации');
         }
 
         // Проверяем, есть ли PIN-код
-        final hasPinCode = await _authService.hasPinCode(user.id);
+        final hasPinCode = _authService.hasPinCode();
 
         // Если PIN нет, устанавливаем временный
         if (!hasPinCode) {
@@ -79,11 +79,7 @@ class _AuthScreenState extends State<AuthScreen> {
           final random = math.Random.secure();
           final tempPin = List.generate(4, (_) => random.nextInt(10)).join();
 
-          final success = await _authService.savePinCode(user.id, tempPin);
-
-          if (!success) {
-            throw Exception('Ошибка при сохранении временного PIN-кода');
-          }
+          await _authService.savePinCode(tempPin);
 
           // Показываем временный PIN пользователю
           if (!mounted) return;
@@ -99,13 +95,15 @@ class _AuthScreenState extends State<AuthScreen> {
 
         // Создаем или обновляем аккаунт в системе мультиаккаунта
         try {
-          final accountExists = await _accountManager.accountExists(
-            user.id,
-            user.role,
-          );
+          final accountExists = await _accountManager.accountExists(user.id);
 
           if (!accountExists) {
-            await _accountManager.createAccount(user, user.role);
+            // Получаем роль пользователя и преобразуем в строку
+            final userRole = await _authService.getCurrentUserRole();
+            final roleStr = userRole.toString().split('.').last;
+
+            // Передаем id и строковое представление роли
+            await _accountManager.createAccount(user.id, roleStr);
             debugPrint('Создан новый аккаунт для пользователя ${user.id}');
           } else {
             debugPrint('Аккаунт пользователя ${user.id} уже существует');
@@ -125,44 +123,20 @@ class _AuthScreenState extends State<AuthScreen> {
       } else {
         debugPrint('Пользователь не существует, отправляем код SMS');
 
-        // Отправляем SMS-код для нового пользователя
-        await _authService.sendPhoneVerificationCode(
-          phoneNumber,
-          (String verificationId) {
-            if (!mounted) return;
+        // Для новой версии API используем signInWithPhoneNumber вместо sendPhoneVerificationCode
+        await _authService.signInWithPhoneNumber(phoneNumber);
 
-            setState(() {
-              _isLoading = false;
-            });
+        // Если метод вернул null, это обычно означает, что SMS отправлен
+        if (!mounted) return;
 
-            // Переходим на экран ввода кода из SMS
-            context.go(
-              '/auth/sms',
-              extra: {
-                'phoneNumber': phoneNumber,
-                'verificationId': verificationId,
-                'isRegistration': true,
-              },
-            );
-          },
-          (String message) {
-            if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+        });
 
-            setState(() {
-              _isLoading = false;
-            });
-
-            // Автоматически подтвержденный код
-            context.go('/home');
-          },
-          (String errorMessage) {
-            if (!mounted) return;
-
-            setState(() {
-              _isLoading = false;
-              _errorMessage = errorMessage;
-            });
-          },
+        // Переходим на экран ввода кода из SMS
+        context.go(
+          '/auth/sms',
+          extra: {'phoneNumber': phoneNumber, 'isRegistration': true},
         );
       }
     } catch (e) {
