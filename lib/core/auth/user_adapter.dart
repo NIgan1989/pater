@@ -151,11 +151,11 @@ class UserAdapter {
       return {
         'id': _firebaseUser.uid,
         'email': _firebaseUser.email ?? '',
-        'firstName': names.first,
-        'lastName': names.length > 1 ? names.last : '',
-        'phoneNumber': _firebaseUser.phoneNumber ?? '',
-        'avatarUrl': _firebaseUser.photoURL,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'first_name': names.first,
+        'last_name': names.length > 1 ? names.last : '',
+        'phone_number': _firebaseUser.phoneNumber ?? '',
+        'avatar_url': _firebaseUser.photoURL,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
       };
     }
 
@@ -206,33 +206,33 @@ class UserAdapter {
     return {
       'id': user.id,
       'email': user.email,
-      'phoneNumber': user.phoneNumber,
-      'firstName': user.firstName,
-      'lastName': user.lastName,
-      'avatarUrl': user.avatarUrl,
-      'emailVerified': user.emailVerified,
-      'isAnonymous': user.isAnonymous,
+      'phone_number': user.phoneNumber,
+      'first_name': user.firstName,
+      'last_name': user.lastName,
+      'avatar_url': user.avatarUrl,
+      'email_verified': user.emailVerified,
+      'is_anonymous': user.isAnonymous,
       'metadata': {
-        'creationTime': user.metadata.creationTime?.toIso8601String(),
-        'lastSignInTime': user.metadata.lastSignInTime?.toIso8601String(),
+        'creation_time': user.metadata.creationTime?.toIso8601String(),
+        'last_sign_in_time': user.metadata.lastSignInTime?.toIso8601String(),
       },
-      'providerData':
+      'provider_data':
           user.providerData
               .map(
                 (data) => {
                   'uid': data.uid,
                   'email': data.email,
-                  'displayName': data.displayName,
-                  'phoneNumber': data.phoneNumber,
-                  'photoURL': data.photoURL,
-                  'providerId': data.providerId,
+                  'display_name': data.displayName,
+                  'phone_number': data.phoneNumber,
+                  'photo_url': data.photoURL,
+                  'provider_id': data.providerId,
                 },
               )
               .toList(),
       'role': user.role.toString().split('.').last,
       'roles':
           user.roles.map((role) => role.toString().split('.').last).toList(),
-      'activeRole': user.activeRole.toString().split('.').last,
+      'active_role': user.activeRole.toString().split('.').last,
     };
   }
 }

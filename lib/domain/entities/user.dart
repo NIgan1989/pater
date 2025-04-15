@@ -190,24 +190,24 @@ class User extends Equatable {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'firstName': firstName,
-      'lastName': lastName,
+      'first_name': firstName,
+      'last_name': lastName,
       'email': email,
-      'phoneNumber': phoneNumber,
-      'avatarUrl': avatarUrl,
-      'emailVerified': emailVerified,
-      'isAnonymous': isAnonymous,
+      'phone_number': phoneNumber,
+      'avatar_url': avatarUrl,
+      'email_verified': emailVerified,
+      'is_anonymous': isAnonymous,
       'metadata': metadata.toJson(),
-      'providerData': providerData.map((e) => e.toJson()).toList(),
+      'provider_data': providerData.map((e) => e.toJson()).toList(),
       'role': role.toString().split('.').last,
       'roles': roles.map((e) => e.toString().split('.').last).toList(),
-      'activeRole': activeRole.toString().split('.').last,
-      'isVerified': isVerified,
+      'active_role': activeRole.toString().split('.').last,
+      'is_verified': isVerified,
       'rating': rating,
-      'reviewsCount': reviewsCount,
+      'reviews_count': reviewsCount,
       'balance': balance,
-      'createdAt': createdAt.millisecondsSinceEpoch,
-      'updatedAt': updatedAt.millisecondsSinceEpoch,
+      'created_at': createdAt.millisecondsSinceEpoch,
+      'updated_at': updatedAt.millisecondsSinceEpoch,
     };
   }
 
@@ -216,36 +216,36 @@ class User extends Equatable {
     DateTime? createdAtDate;
     DateTime? updatedAtDate;
 
-    if (json['createdAt'] is Timestamp) {
-      createdAtDate = (json['createdAt'] as Timestamp).toDate();
-    } else if (json['createdAt'] is int) {
+    if (json['created_at'] is Timestamp) {
+      createdAtDate = (json['created_at'] as Timestamp).toDate();
+    } else if (json['created_at'] is int) {
       createdAtDate = DateTime.fromMillisecondsSinceEpoch(
-        json['createdAt'] as int,
+        json['created_at'] as int,
       );
     }
 
-    if (json['updatedAt'] is Timestamp) {
-      updatedAtDate = (json['updatedAt'] as Timestamp).toDate();
-    } else if (json['updatedAt'] is int) {
+    if (json['updated_at'] is Timestamp) {
+      updatedAtDate = (json['updated_at'] as Timestamp).toDate();
+    } else if (json['updated_at'] is int) {
       updatedAtDate = DateTime.fromMillisecondsSinceEpoch(
-        json['updatedAt'] as int,
+        json['updated_at'] as int,
       );
     }
 
     return User(
       id: json['id'] as String? ?? '',
-      firstName: json['firstName'] as String? ?? '',
-      lastName: json['lastName'] as String? ?? '',
+      firstName: json['first_name'] as String? ?? '',
+      lastName: json['last_name'] as String? ?? '',
       email: json['email'] as String? ?? '',
-      phoneNumber: json['phoneNumber'] as String? ?? '',
-      avatarUrl: json['avatarUrl'] as String?,
-      emailVerified: json['emailVerified'] as bool? ?? false,
-      isAnonymous: json['isAnonymous'] as bool? ?? false,
+      phoneNumber: json['phone_number'] as String? ?? '',
+      avatarUrl: json['avatar_url'] as String?,
+      emailVerified: json['email_verified'] as bool? ?? false,
+      isAnonymous: json['is_anonymous'] as bool? ?? false,
       metadata: UserMetadata.fromJson(
         json['metadata'] as Map<String, dynamic>? ?? {},
       ),
       providerData:
-          (json['providerData'] as List<dynamic>?)
+          (json['provider_data'] as List<dynamic>?)
               ?.map((e) => UserInfo.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
@@ -255,10 +255,10 @@ class User extends Equatable {
               ?.map((e) => _parseRole(e as String))
               .toList() ??
           [UserRole.client],
-      activeRole: _parseRole(json['activeRole'] as String? ?? 'client'),
-      isVerified: json['isVerified'] as bool? ?? false,
+      activeRole: _parseRole(json['active_role'] as String? ?? 'client'),
+      isVerified: json['is_verified'] as bool? ?? false,
       rating: json['rating'] != null ? (json['rating'] as num).toDouble() : 0.0,
-      reviewsCount: json['reviewsCount'] as int? ?? 0,
+      reviewsCount: json['reviews_count'] as int? ?? 0,
       balance:
           json['balance'] != null ? (json['balance'] as num).toDouble() : 0.0,
       createdAt: createdAtDate,

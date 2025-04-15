@@ -205,7 +205,7 @@ class AuthService extends ChangeNotifier {
           await _firestore
               .collection('users')
               .where(
-                'phoneNumber',
+                'phone_number',
                 whereIn: [
                   normalizedPhone,
                   if (phoneWithoutCode != null) phoneWithoutCode,
@@ -251,7 +251,7 @@ class AuthService extends ChangeNotifier {
         final querySnapshot =
             await _firestore
                 .collection('users')
-                .where('phoneNumber', isEqualTo: normalizedPhone)
+                .where('phone_number', isEqualTo: normalizedPhone)
                 .limit(1)
                 .get();
 
@@ -273,8 +273,8 @@ class AuthService extends ChangeNotifier {
         final user = domain.User.simplified(
           id: userId,
           email: userData['email'] as String? ?? '',
-          firstName: userData['firstName'] as String? ?? 'Пользователь',
-          lastName: userData['lastName'] as String? ?? '',
+          firstName: userData['first_name'] as String? ?? 'Пользователь',
+          lastName: userData['last_name'] as String? ?? '',
           phoneNumber: normalizedPhone,
           role: _parseRole(userData['role'] as String? ?? 'client'),
         );
@@ -373,7 +373,7 @@ class AuthService extends ChangeNotifier {
       final existingUserQuery =
           await _firestore
               .collection('users')
-              .where('phoneNumber', isEqualTo: userPhone)
+              .where('phone_number', isEqualTo: userPhone)
               .limit(1)
               .get();
 
@@ -388,13 +388,13 @@ class AuthService extends ChangeNotifier {
 
         // Создаем документ пользователя
         await _firestore.collection('users').doc(userId).set({
-          'phoneNumber': userPhone,
-          'firstName': 'Пользователь',
-          'lastName': '',
+          'phone_number': userPhone,
+          'first_name': 'Пользователь',
+          'last_name': '',
           'email': '',
           'role': 'client',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
+          'created_at': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
         });
 
         debugPrint('Новый пользователь создан с ID: $userId');
@@ -483,41 +483,26 @@ class AuthService extends ChangeNotifier {
 
   // Вход с использованием PIN-кода
   Future<bool> signInWithPinCode(String pin) async {
-    debugPrint('Выполняется вход с PIN-кодом');
-
     bool isValid = await verifyPin(pin);
 
     if (isValid) {
-      debugPrint('PIN-код верный, устанавливаем состояние аутентификации');
+      // Сохраняем состояние аутентификации
+      await _prefs.setBool('is_authenticated', true);
 
-      // Явно сохраняем состояние аутентификации
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_authenticated', true);
+      // Сохраняем дату последней авторизации
+      await _prefs.setString(
+        'last_auth_date',
+        DateTime.now().toIso8601String(),
+      );
 
-      // Обновляем другие данные сессии, если необходимо
+      // Восстанавливаем сессию, если необходимо
       final userId = _prefs.getString('user_id');
-      if (userId != null) {
-        await prefs.setString(
-          'last_auth_date',
-          DateTime.now().toIso8601String(),
-        );
-
-        // Если текущий пользователь Firebase равен null, пытаемся восстановить сессию
-        if (_auth.currentUser == null) {
-          debugPrint(
-            'Восстанавливаем сессию Firebase Auth для пользователя $userId',
-          );
-          await restoreUserSessionById(userId);
-        }
+      if (userId != null && _auth.currentUser == null) {
+        await restoreUserSessionById(userId);
       }
 
-      // Уведомляем об изменении состояния авторизации
+      // Уведомляем об изменении состояния
       notifyListeners();
-      debugPrint(
-        'Статус аутентификации: ${isAuthenticated ? "авторизован" : "не авторизован"}',
-      );
-    } else {
-      debugPrint('Неверный PIN-код, вход не выполнен');
     }
 
     return isValid;
