@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart' as firebase;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pater/domain/entities/user.dart' as domain;
 import 'package:pater/core/auth/role_manager.dart';
 import 'package:pater/domain/entities/user_role.dart';
@@ -10,14 +10,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService extends ChangeNotifier {
-  final firebase.FirebaseAuth _auth;
+  final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
   final RoleManager _roleManager;
   final SharedPreferences _prefs;
   final AccountManager _accountManager;
 
   AuthService({
-    required firebase.FirebaseAuth auth,
+    required FirebaseAuth auth,
     required FirebaseFirestore firestore,
     required RoleManager roleManager,
     required SharedPreferences prefs,
@@ -33,7 +33,7 @@ class AuthService extends ChangeNotifier {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     AccountManager accountManager = AccountManager();
     return AuthService(
-      auth: firebase.FirebaseAuth.instance,
+      auth: FirebaseAuth.instance,
       firestore: FirebaseFirestore.instance,
       roleManager: await RoleManager.instance(),
       prefs: prefs,
@@ -46,7 +46,7 @@ class AuthService extends ChangeNotifier {
     SharedPreferences prefs = _getDefaultPrefs();
     AccountManager accountManager = AccountManager();
     return AuthService(
-      auth: firebase.FirebaseAuth.instance,
+      auth: FirebaseAuth.instance,
       firestore: FirebaseFirestore.instance,
       roleManager: _getDefaultRoleManager(),
       prefs: prefs,
@@ -193,202 +193,251 @@ class AuthService extends ChangeNotifier {
       );
       debugPrint('Нормализованный номер телефона: $normalizedPhone');
 
-      // Также пробуем вариант без кода страны, если номер начинается с +7
-      String? phoneWithoutCode;
-      if (normalizedPhone.startsWith('+7')) {
-        phoneWithoutCode = normalizedPhone.substring(2); // Убираем +7
-        debugPrint('Альтернативный номер без кода: $phoneWithoutCode');
+      // Удаляем "+" если он есть в начале номера
+      if (normalizedPhone.startsWith('+')) {
+        normalizedPhone = normalizedPhone.substring(1);
+        debugPrint('Номер без "+": $normalizedPhone');
       }
 
-      // Поиск пользователя по номеру телефона в Firestore (проверяем оба варианта)
-      final querySnapshot =
-          await _firestore
+      // Создаем список всех возможных форматов номера
+      // В том числе, пробуем варианты с кодом страны и без кода
+      List<String> possibleFormats = [normalizedPhone];
+      
+      // Вариант без кода страны 7
+      if (normalizedPhone.startsWith('7')) {
+        possibleFormats.add(normalizedPhone.substring(1));
+        debugPrint('Добавлен формат без кода страны: ${normalizedPhone.substring(1)}');
+      }
+      
+      // Вариант с префиксом +
+      possibleFormats.add('+$normalizedPhone');
+      debugPrint('Добавлен формат с префиксом +: +$normalizedPhone');
+      
+      debugPrint('Поиск по возможным форматам: $possibleFormats');
+      
+      // Ищем по всем возможным полям в Firestore
+      final fields = ['phoneNumber', 'phone_number'];
+      
+      for (final field in fields) {
+        for (final format in possibleFormats) {
+          final query = await _firestore
               .collection('users')
-              .where(
-                'phone_number',
-                whereIn: [
-                  normalizedPhone,
-                  if (phoneWithoutCode != null) phoneWithoutCode,
-                ],
-              )
+              .where(field, isEqualTo: format)
               .limit(1)
               .get();
-
-      bool userExists = querySnapshot.docs.isNotEmpty;
-      debugPrint(
-        'Пользователь ${userExists ? "найден" : "не найден"} в Firestore',
-      );
-
-      return userExists;
+              
+          if (query.docs.isNotEmpty) {
+            debugPrint('Пользователь найден в Firestore по полю $field со значением $format');
+            return true;
+          }
+        }
+      }
+      
+      // Если предыдущие проверки не сработали, пробуем whereIn
+      for (final field in fields) {
+        final query = await _firestore
+            .collection('users')
+            .where(field, whereIn: possibleFormats)
+            .limit(1)
+            .get();
+            
+        if (query.docs.isNotEmpty) {
+          debugPrint('Пользователь найден в Firestore по полю $field с одним из форматов');
+          return true;
+        }
+      }
+      
+      debugPrint('Пользователь не найден в Firestore');
+      return false;
     } catch (e) {
       debugPrint('Ошибка при проверке существования пользователя: $e');
       return false;
     }
   }
 
-  Future<domain.User?> signInWithPhoneNumber(String phoneNumber) async {
-    try {
-      // Проверяем наличие пользователя
-      final userExists = await checkUserExistsByPhone(phoneNumber);
-      debugPrint(
-        'Статус проверки пользователя: ${userExists ? "Существует" : "Не существует"}',
-      );
+  String? _verificationId;
+  String? _phoneNumber;
 
-      // Нормализуем номер телефона для сохранения
+  Future<String?> signInWithPhoneNumber(String phoneNumber) async {
+    try {
+      // Нормализуем номер телефона (удаляем пробелы, скобки, дефисы)
       String normalizedPhone = phoneNumber.replaceAll(
         RegExp(r'[\s\(\)\-]'),
         '',
       );
+      debugPrint('Нормализованный номер для входа: $normalizedPhone');
 
-      // Упрощенный метод без использования Firebase Auth
-      debugPrint('Упрощенная авторизация без Firebase Auth');
+      // Проверяем, существует ли пользователь с этим номером телефона
+      bool userExists = await checkUserExistsByPhone(normalizedPhone);
+      debugPrint('Пользователь существует: $userExists');
 
-      // Для существующего пользователя
-      if (userExists) {
-        debugPrint('Авторизация существующего пользователя');
-
-        // Получаем данные пользователя из Firestore
-        final querySnapshot =
-            await _firestore
-                .collection('users')
-                .where('phone_number', isEqualTo: normalizedPhone)
-                .limit(1)
-                .get();
-
-        if (querySnapshot.docs.isEmpty) {
-          debugPrint(
-            'Ошибка: пользователь существует, но не найден в Firestore',
-          );
-          throw Exception('Пользователь не найден');
-        }
-
-        // Получаем документ пользователя
-        final userDoc = querySnapshot.docs.first;
-        final userData = userDoc.data();
-        final userId = userDoc.id;
-
-        debugPrint('Получены данные пользователя с ID: $userId');
-
-        // Создаем объект пользователя
-        final user = domain.User.simplified(
-          id: userId,
-          email: userData['email'] as String? ?? '',
-          firstName: userData['first_name'] as String? ?? 'Пользователь',
-          lastName: userData['last_name'] as String? ?? '',
-          phoneNumber: normalizedPhone,
-          role: _parseRole(userData['role'] as String? ?? 'client'),
-        );
-
-        // Сохраняем данные пользователя локально
-        await _prefs.setString('user_id', userId);
-        await _prefs.setString('user_phone', normalizedPhone);
-
-        // Уведомляем слушателей об изменении состояния
-        notifyListeners();
-
-        return user;
-      } else {
-        debugPrint('Симуляция отправки SMS кода для нового пользователя');
-
-        // Генерируем временный ID для нового пользователя
-        final tempUserId =
-            'temp-user-${normalizedPhone.replaceAll(RegExp(r'[^0-9]'), '')}-${DateTime.now().millisecondsSinceEpoch}';
-
-        // Сохраняем временный ID и номер телефона
-        await _prefs.setString('temp_user_id', tempUserId);
-        await _prefs.setString('temp_phone', normalizedPhone);
-
-        // Сохраняем тестовый верификационный ID для последующей проверки SMS
-        final verificationId = 'verification-$tempUserId';
-        await _prefs.setString('verificationId', verificationId);
-
-        // Имитируем отправку SMS
-        await Future.delayed(const Duration(seconds: 1));
-
-        // Сохраняем тестовый код для последующей проверки
-        await _prefs.setString('sms_code', '123456');
-
-        // Показываем тестовый код в консоли
-        debugPrint('Тестовый SMS код: 123456');
-
-        // Для новых пользователей возвращаем null, чтобы перейти к экрану ввода SMS
-        return null;
+      if (!userExists) {
+        // Если пользователя нет, информируем пользователя
+        return 'Пользователь с таким номером телефона не найден';
       }
-    } catch (e) {
-      debugPrint('Ошибка в signInWithPhoneNumber: $e');
-      rethrow;
-    }
-  }
 
-  // Парсинг роли из строки
-  UserRole _parseRole(String roleStr) {
-    switch (roleStr.toLowerCase()) {
-      case 'owner':
-        return UserRole.owner;
-      case 'cleaner':
-        return UserRole.cleaner;
-      case 'admin':
-        return UserRole.admin;
-      case 'support':
-        return UserRole.support;
-      case 'client':
-      default:
-        return UserRole.client;
+      // Очищаем предыдущий номер телефона
+      _verificationId = null;
+      _phoneNumber = null;
+
+      // Сохраняем нормализованный номер в переменную экземпляра
+      _phoneNumber = normalizedPhone;
+
+      // Убедимся, что номер имеет правильный формат для Firebase Auth
+      // Если номер не начинается с +, добавляем +
+      String phoneNumberForAuth = normalizedPhone.startsWith('+') 
+          ? normalizedPhone 
+          : '+$normalizedPhone';
+
+      debugPrint('Номер для Firebase Auth: $phoneNumberForAuth');
+
+      // Отправляем SMS для верификации номера телефона
+      await _auth.verifyPhoneNumber(
+        phoneNumber: phoneNumberForAuth,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          // Автоматическая верификация (только для Android)
+          debugPrint('Автоматическая верификация');
+          await _auth.signInWithCredential(credential);
+          notifyListeners();
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          debugPrint('Ошибка верификации: ${e.message}');
+          throw Exception('Ошибка отправки СМС: ${e.message}');
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          debugPrint('СМС отправлено, ID верификации: $verificationId');
+          _verificationId = verificationId;
+          // Сохраняем ID верификации для использования в verifyPhoneNumber
+          _prefs.setString('verificationId', verificationId);
+          _prefs.setString('phoneNumberForAuth', phoneNumberForAuth);
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          debugPrint('Таймаут автоматического получения кода');
+          _verificationId = verificationId;
+          _prefs.setString('verificationId', verificationId);
+        },
+        timeout: const Duration(seconds: 60),
+      );
+
+      // Сообщаем, что верификация началась и пользователь должен ввести код из СМС
+      return null;
+    } catch (e) {
+      debugPrint('Ошибка при входе с номером телефона: $e');
+      return 'Ошибка при входе: $e';
     }
   }
 
   Future<domain.User?> verifyPhoneNumber(String smsCode) async {
     try {
-      final verificationId = _prefs.getString('verificationId');
+      // Получаем сохраненный ID верификации
+      final verificationId = _verificationId ?? _prefs.getString('verificationId');
       if (verificationId == null) {
-        throw Exception('Verification ID not found');
+        throw Exception('ID верификации не найден');
       }
 
-      debugPrint('Проверка SMS кода: $smsCode');
-
-      // Получаем сохраненный тестовый код
-      final testSmsCode = _prefs.getString('sms_code') ?? '123456';
-      debugPrint(
-        'Сравнение кодов: введено "$smsCode", ожидалось "$testSmsCode"',
+      debugPrint('Верификация SMS кода');
+      
+      // Создаем учетные данные для аутентификации
+      PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: smsCode,
       );
-
-      // Проверяем код
-      if (smsCode != testSmsCode) {
-        debugPrint('Неверный SMS код');
-        throw Exception('Неверный SMS код');
+      
+      // Авторизуемся с полученными данными
+      final userCredential = await _auth.signInWithCredential(credential);
+      final firebaseUser = userCredential.user;
+      
+      if (firebaseUser == null) {
+        throw Exception('Ошибка авторизации');
       }
-
-      // Получаем временный ID и номер телефона пользователя
-      final tempUserId = _prefs.getString('temp_user_id');
-      final userPhone = _prefs.getString('temp_phone');
-
-      if (tempUserId == null || userPhone == null) {
-        debugPrint(
-          'Ошибка: не найдены данные пользователя в SharedPreferences',
-        );
-        throw Exception('Данные пользователя не найдены');
+      
+      // Получаем номер телефона из Firebase User или из сохраненного ранее
+      String? phoneNumber = firebaseUser.phoneNumber ?? _phoneNumber ?? _prefs.getString('phoneNumberForAuth');
+      if (phoneNumber == null || phoneNumber.isEmpty) {
+        throw Exception('Номер телефона не найден');
       }
-
-      // Проверяем, существует ли уже пользователь с таким номером
-      final existingUserQuery =
-          await _firestore
+      
+      debugPrint('Номер телефона после верификации: $phoneNumber');
+      
+      // Нормализуем номер для поиска в Firestore
+      String normalizedPhone = phoneNumber.replaceAll(
+        RegExp(r'[\s\(\)\-]'),
+        '',
+      );
+      
+      // Удаляем "+" если он есть в начале номера для поиска в Firestore
+      if (normalizedPhone.startsWith('+')) {
+        normalizedPhone = normalizedPhone.substring(1);
+      }
+      
+      debugPrint('Нормализованный номер для поиска в Firestore: $normalizedPhone');
+      
+      // Создаем список возможных форматов для поиска
+      List<String> possibleFormats = [
+        normalizedPhone,
+        '+$normalizedPhone',
+      ];
+      
+      if (normalizedPhone.startsWith('7')) {
+        possibleFormats.add(normalizedPhone.substring(1));
+      }
+      
+      debugPrint('Поиск пользователя по возможным форматам: $possibleFormats');
+      
+      // Поиск пользователя в Firestore
+      QuerySnapshot? existingUserQuery;
+      String? userId;
+      final fields = ['phoneNumber', 'phone_number'];
+      
+      // Проверяем каждый возможный формат номера в каждом поле
+      for (final field in fields) {
+        for (final format in possibleFormats) {
+          final query = await _firestore
               .collection('users')
-              .where('phone_number', isEqualTo: userPhone)
+              .where(field, isEqualTo: format)
               .limit(1)
               .get();
-
-      String userId;
+              
+          if (query.docs.isNotEmpty) {
+            existingUserQuery = query;
+            userId = query.docs.first.id;
+            debugPrint('Найден пользователь по полю $field со значением $format, ID: $userId');
+            break;
+          }
+        }
+        
+        if (existingUserQuery != null) break;
+      }
+      
+      // Если пользователя не нашли через поля, пробуем whereIn
+      if (existingUserQuery == null) {
+        for (final field in fields) {
+          final query = await _firestore
+              .collection('users')
+              .where(field, whereIn: possibleFormats)
+              .limit(1)
+              .get();
+              
+          if (query.docs.isNotEmpty) {
+            existingUserQuery = query;
+            userId = query.docs.first.id;
+            debugPrint('Найден пользователь по полю $field с одним из форматов, ID: $userId');
+            break;
+          }
+        }
+      }
 
       // Если пользователь еще не существует, создаем его в Firestore
-      if (existingUserQuery.docs.isEmpty) {
+      if (existingUserQuery == null || existingUserQuery.docs.isEmpty) {
         debugPrint('Создаем нового пользователя в Firestore');
 
-        // Генерируем уникальный ID для пользователя
-        userId = 'user-${DateTime.now().millisecondsSinceEpoch}';
+        // Используем Firebase Auth UID как ID пользователя
+        userId = firebaseUser.uid;
 
         // Создаем документ пользователя
         await _firestore.collection('users').doc(userId).set({
-          'phone_number': userPhone,
+          'phone_number': normalizedPhone,
+          'phoneNumber': normalizedPhone,
           'first_name': 'Пользователь',
           'last_name': '',
           'email': '',
@@ -398,31 +447,44 @@ class AuthService extends ChangeNotifier {
         });
 
         debugPrint('Новый пользователь создан с ID: $userId');
-      } else {
-        // Если пользователь существует, используем его ID
-        userId = existingUserQuery.docs.first.id;
-        debugPrint('Найден существующий пользователь с ID: $userId');
+      } else if (userId == null) {
+        // Если не удалось найти ID пользователя, используем UID из Firebase
+        userId = firebaseUser.uid;
+        debugPrint('Используем Firebase UID как ID пользователя: $userId');
+      }
+
+      // Получаем информацию о пользователе из Firestore
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      String firstName = 'Пользователь';
+      String lastName = '';
+      
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        if (userData != null) {
+          firstName = userData['first_name'] ?? userData['firstName'] ?? 'Пользователь';
+          lastName = userData['last_name'] ?? userData['lastName'] ?? '';
+        }
       }
 
       // Создаем объект пользователя
       final user = domain.User.simplified(
         id: userId,
-        email: '',
-        firstName: 'Пользователь',
-        lastName: '',
-        phoneNumber: userPhone,
+        email: firebaseUser.email ?? '',
+        firstName: firstName,
+        lastName: lastName,
+        phoneNumber: normalizedPhone,
         role: UserRole.client,
       );
 
       // Сохраняем данные пользователя локально
       await _prefs.setString('user_id', userId);
-      await _prefs.setString('user_phone', userPhone);
+      await _prefs.setString('user_phone', normalizedPhone);
+      await _prefs.setBool('is_authenticated', true);
+      await _prefs.setString('last_auth_date', DateTime.now().toIso8601String());
 
       // Удаляем временные данные
-      await _prefs.remove('temp_user_id');
-      await _prefs.remove('temp_phone');
       await _prefs.remove('verificationId');
-      await _prefs.remove('sms_code');
+      await _prefs.remove('phoneNumberForAuth');
 
       // Уведомляем слушателей об изменении состояния
       notifyListeners();

@@ -6,8 +6,6 @@ import 'package:pater/core/constants/app_constants.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
 import 'package:get_it/get_it.dart';
-import 'dart:math' as math;
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Экран авторизации в приложении
 class AuthScreen extends StatefulWidget {
@@ -67,46 +65,43 @@ class _AuthScreenState extends State<AuthScreen> {
       debugPrint('Пользователь существует, перенаправляем на экран PIN-кода');
 
       // Выполняем вход по номеру телефона без SMS
-      final user = await _authService.signInWithPhoneNumber(phoneNumber);
+      final errorMessage = await _authService.signInWithPhoneNumber(phoneNumber);
 
-      if (user == null) {
-        throw Exception('Ошибка при авторизации');
+      if (errorMessage != null) {
+        throw Exception(errorMessage);
       }
 
+      // Получаем ID пользователя 
+      final userId = _authService.getUserId() ?? '';
+      
       // Проверяем, есть ли PIN-код
       final hasPinCode = _authService.hasPinCode();
 
       // Если PIN нет, устанавливаем временный
       if (!hasPinCode) {
         debugPrint(
-          'У пользователя нет PIN-кода, устанавливаем временный случайный PIN-код',
+          'У пользователя нет PIN-кода, запрашиваем установку нового PIN-кода',
         );
-        // Генерируем случайный PIN-код вместо фиксированного значения
-        final random = math.Random.secure();
-        final tempPin = List.generate(4, (_) => random.nextInt(10)).join();
+        
+        // Сохраним данные для PIN-экрана с пометкой, что нужно установить PIN
+        final pinData = {
+          'extra': {
+            'userId': userId, 
+            'phoneNumber': phoneNumber,
+            'setupPin': true
+          }
+        };
 
-        await _authService.savePinCode(tempPin);
-
-        // Также сохраняем временный PIN-код напрямую для упрощения проверки
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('temp_pin', tempPin);
-        debugPrint('Временный PIN-код сохранен отдельно: $tempPin');
-
-        // Показываем временный PIN пользователю
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ваш временный PIN-код: $tempPin'),
-            duration: const Duration(seconds: 10),
-            action: SnackBarAction(label: 'OK', onPressed: () {}),
-          ),
-        );
+        // Проверим, что контекст всё ещё привязан
+        if (mounted) {
+          context.push('/auth/pin', extra: pinData);
+        }
+        return;
       }
 
       // Создаем или обновляем аккаунт в системе мультиаккаунта
       try {
-        final accountExists = await _accountManager.accountExists(user.id);
+        final accountExists = await _accountManager.accountExists(userId);
 
         if (!accountExists) {
           // Получаем роль пользователя и преобразуем в строку
@@ -114,10 +109,10 @@ class _AuthScreenState extends State<AuthScreen> {
           final roleStr = userRole.toString().split('.').last;
 
           // Передаем id и строковое представление роли
-          await _accountManager.createAccount(user.id, roleStr);
-          debugPrint('Создан новый аккаунт для пользователя ${user.id}');
+          await _accountManager.createAccount(userId, roleStr);
+          debugPrint('Создан новый аккаунт для пользователя $userId');
         } else {
-          debugPrint('Аккаунт пользователя ${user.id} уже существует');
+          debugPrint('Аккаунт пользователя $userId уже существует');
         }
       } catch (e) {
         debugPrint('Ошибка при работе с аккаунтом: $e');
@@ -125,7 +120,12 @@ class _AuthScreenState extends State<AuthScreen> {
       }
 
       // Сохраним данные для PIN-экрана
-      final pinData = {'userId': user.id, 'phoneNumber': user.phoneNumber};
+      final pinData = {
+        'extra': {
+          'userId': userId, 
+          'phoneNumber': phoneNumber
+        }
+      };
 
       // Проверим, что контекст всё ещё привязан
       if (mounted) {

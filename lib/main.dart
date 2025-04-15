@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/data/services/notification_service.dart';
 import 'package:pater/core/di/service_locator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Инициализирует Firebase
 Future<void> initializeFirebase() async {
@@ -49,6 +50,14 @@ Future<void> fixExistingPropertyStatuses() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Очистка временных данных авторизации
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('temp_pin');
+  await prefs.remove('temp_user_id');
+  await prefs.remove('temp_phone');
+  await prefs.remove('verificationId');
+  await prefs.remove('sms_code');
 
   // Инициализируем Firebase
   await initializeFirebase();
