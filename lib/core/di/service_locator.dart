@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pater/core/auth/role_manager.dart';
 import 'package:pater/core/auth/auth_service.dart';
+import 'package:pater/core/auth/account_manager.dart';
 import 'package:pater/data/services/user_service.dart';
 import 'package:pater/data/repositories/user_repository_impl.dart';
 import 'package:pater/domain/repositories/user_repository.dart';
@@ -35,6 +36,9 @@ Future<void> setupServiceLocator() async {
     ),
   );
 
+  // Account manager
+  getIt.registerSingleton<AccountManager>(AccountManager());
+
   // Auth service
   getIt.registerSingleton<AuthService>(
     AuthService(
@@ -42,6 +46,7 @@ Future<void> setupServiceLocator() async {
       firestore: getIt<FirebaseFirestore>(),
       roleManager: getIt<RoleManager>(),
       prefs: getIt<SharedPreferences>(),
+      accountManager: getIt<AccountManager>(),
     ),
   );
 
@@ -76,6 +81,6 @@ Future<void> setupServiceLocator() async {
 
   // Repositories
   getIt.registerSingleton<UserRepository>(
-    UserRepositoryImpl(getIt<UserService>() as dynamic),
+    UserRepositoryImpl(getIt<UserService>()),
   );
 }

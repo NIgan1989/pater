@@ -57,8 +57,7 @@ class _SearchContentState extends State<SearchContent>
   String _searchQuery = '';
 
   // Контроллер для выдвижного списка
-  final DraggableScrollableController _bottomSheetController =
-      DraggableScrollableController();
+  late DraggableScrollableController _bottomSheetController;
 
   // Текущее местоположение пользователя
   Position? _currentPosition;
@@ -88,6 +87,7 @@ class _SearchContentState extends State<SearchContent>
   void initState() {
     super.initState();
     _user = _authService.currentUser;
+    _bottomSheetController = DraggableScrollableController();
     _loadData();
 
     // Инициализация контроллера вкладок для владельцев
@@ -553,41 +553,46 @@ class _SearchContentState extends State<SearchContent>
                   ),
 
                   // Expand/Collapse buttons
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 3,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Найдено: ${_filteredProperties.length}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                  SizedBox(
+                    height: 30, // Фиксированная высота для кнопок
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 3,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Найдено: ${_filteredProperties.length}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.keyboard_arrow_down),
-                              onPressed: _collapseBottomSheet,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              tooltip: 'Свернуть',
-                            ),
-                            const SizedBox(width: 16),
-                            IconButton(
-                              icon: const Icon(Icons.keyboard_arrow_up),
-                              onPressed: _expandBottomSheet,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              tooltip: 'Развернуть',
-                            ),
-                          ],
-                        ),
-                      ],
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.keyboard_arrow_down),
+                                onPressed: _collapseBottomSheet,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                tooltip: 'Свернуть',
+                                iconSize: 20, // Уменьшаем размер иконки
+                              ),
+                              const SizedBox(width: 16),
+                              IconButton(
+                                icon: const Icon(Icons.keyboard_arrow_up),
+                                onPressed: _expandBottomSheet,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                tooltip: 'Развернуть',
+                                iconSize: 20, // Уменьшаем размер иконки
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 

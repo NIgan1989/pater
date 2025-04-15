@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/presentation/widgets/common/error_message.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pater/core/di/service_locator.dart';
 
 /// Экран для ввода SMS-кода
@@ -14,14 +13,10 @@ class SmsCodeScreen extends StatefulWidget {
   /// Номер телефона, на который был отправлен код
   final String phoneNumber;
 
-  /// Признак того, что происходит регистрация (а не просто вход)
-  final bool isRegistration;
-
   const SmsCodeScreen({
     super.key,
     required this.verificationId,
     required this.phoneNumber,
-    this.isRegistration = false,
   });
 
   @override
@@ -52,10 +47,6 @@ class _SmsCodeScreenState extends State<SmsCodeScreen> {
         _focusNode.requestFocus();
       }
     });
-
-    if (widget.isRegistration) {
-      _checkAndClearOldRegistrationData();
-    }
   }
 
   @override
@@ -118,58 +109,6 @@ class _SmsCodeScreenState extends State<SmsCodeScreen> {
     }
   }
 
-  Future<void> _checkAndClearOldRegistrationData() async {
-    try {
-      // Получаем все необходимые данные из контекста до асинхронных операций
-      String? extraRole;
-      String? extraName;
-
-      // Безопасно получаем extra данные из текущего контекста
-      if (mounted) {
-        final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
-        if (extra != null) {
-          extraRole = extra['role'] as String?;
-          extraName = extra['name'] as String?;
-
-          debugPrint(
-            'Получены параметры из extra: роль=$extraRole, имя=$extraName',
-          );
-        }
-      }
-
-      // Теперь выполняем асинхронные операции без использования контекста
-      final prefs = await SharedPreferences.getInstance();
-      final role = prefs.getString('registration_role');
-      final name = prefs.getString('registration_name');
-      final lastName = prefs.getString('registration_lastname');
-
-      debugPrint(
-        'Данные регистрации при открытии SMS-экрана: роль=$role, имя=$name $lastName',
-      );
-
-      // Обновляем данные из extra параметров, если они были получены
-      if (extraRole != null) {
-        await prefs.setString('registration_role', extraRole);
-        debugPrint('Обновлена роль из extra параметров: $extraRole');
-      }
-
-      if (extraName != null) {
-        final nameParts = extraName.trim().split(' ');
-        final firstName = nameParts.first;
-        final lastName =
-            nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-
-        await prefs.setString('registration_name', firstName);
-        await prefs.setString('registration_lastname', lastName);
-        debugPrint(
-          'Обновлены имя/фамилия из extra параметров: $firstName $lastName',
-        );
-      }
-    } catch (e) {
-      debugPrint('Ошибка при проверке данных регистрации: $e');
-    }
-  }
-
   // Метод для проверки SMS-кода
   void _verifyCode() async {
     // Получаем чистый код без пробелов
@@ -189,38 +128,30 @@ class _SmsCodeScreenState extends State<SmsCodeScreen> {
       if (mounted) {
         if (result != null) {
           // Если успешно, перенаправляем пользователя
-          if (widget.isRegistration) {
-            // Для новых пользователей переходим на экран создания PIN-кода
-            context.go('/auth/create-pin');
-          } else {
-            // Для существующих - проверяем наличие PIN
-            if (_authService.hasPinCode()) {
-              final userId = result.id;
+          // Проверяем наличие PIN
+          if (_authService.hasPinCode()) {
+            final userId = result.id;
 
-              // Переходим на экран ввода PIN
-              final pinData = {
-                'userId': userId,
-                'phoneNumber': widget.phoneNumber,
-              };
-              context.push('/auth/pin', extra: pinData);
-            } else {
-              // Переходим на экран создания PIN
-              context.go('/auth/create-pin');
-            }
+            // Переходим на экран ввода PIN
+            context.go(
+              '/auth/pin',
+              extra: {'userId': userId, 'phoneNumber': widget.phoneNumber},
+            );
+          } else {
+            // Если PIN нет, направляем на экран создания PIN
+            context.go('/auth/create-pin');
           }
         } else {
+          // Что-то пошло не так
           setState(() {
-            _errorMessage = 'Неверный код';
-            _codeController.clear();
+            _errorMessage = 'Ошибка проверки кода';
           });
         }
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Ошибка проверки кода: $e';
-        });
-      }
+      setState(() {
+        _errorMessage = e.toString();
+      });
     }
   }
 

@@ -106,4 +106,9 @@ class UserService {
   Future<String?> uploadUserAvatar(String userId, String imagePath) async {
     return _userService.uploadUserAvatar(userId, imagePath);
   }
+
+  /// Получает список топовых клинеров
+  Future<List<User>> getTopCleaners({int limit = 10}) async {
+    return _userService.getTopCleaners(limit: limit);
+  }
 }

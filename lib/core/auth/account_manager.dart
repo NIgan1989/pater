@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class AccountManager {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -129,17 +130,75 @@ class AccountManager {
 
   // Проверка PIN-кода
   Future<bool> verifyPin(String pin) async {
-    if (_auth.currentUser == null) return false;
+    if (_auth.currentUser == null) {
+      debugPrint('verifyPin: currentUser == null');
+      // Альтернативная проверка PIN по последнему сохраненному пользователю
+      try {
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        String? lastUserId = prefs.getString('user_id');
+
+        if (lastUserId != null) {
+          debugPrint(
+            'verifyPin: используем последний сохраненный ID: $lastUserId',
+          );
+          String? storedPin = prefs.getString('pin_$lastUserId');
+
+          if (storedPin == null) {
+            debugPrint('verifyPin: для последнего ID нет сохраненного PIN');
+            // Пробуем найти временный PIN
+            storedPin = prefs.getString('temp_pin');
+            debugPrint('verifyPin: временный PIN: ${storedPin != null}');
+          }
+
+          if (storedPin != null) {
+            // Для временного PIN просто сравниваем значения
+            if (storedPin == pin) {
+              debugPrint('verifyPin: временный PIN совпал');
+              return true;
+            }
+
+            // Для обычного PIN хешируем с солью
+            var bytes = utf8.encode(pin + lastUserId);
+            var digest = sha256.convert(bytes);
+            String hashedPin = digest.toString();
+
+            debugPrint('verifyPin: сравниваем хешированный PIN');
+            return storedPin == hashedPin;
+          }
+        }
+      } catch (e) {
+        debugPrint('verifyPin: ошибка при альтернативной проверке: $e');
+      }
+      return false;
+    }
 
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? storedPin = prefs.getString('pin_${_auth.currentUser!.uid}');
+      String uid = _auth.currentUser!.uid;
+      debugPrint('verifyPin: проверка для пользователя $uid');
 
-      if (storedPin == null) return false;
+      String? storedPin = prefs.getString('pin_$uid');
+      debugPrint('verifyPin: найден сохраненный PIN: ${storedPin != null}');
+
+      if (storedPin == null) {
+        // Пробуем найти временный PIN
+        storedPin = prefs.getString('temp_pin');
+        debugPrint('verifyPin: найден временный PIN: ${storedPin != null}');
+
+        // Для временного PIN просто сравниваем значения
+        if (storedPin != null && storedPin == pin) {
+          debugPrint('verifyPin: временный PIN совпал');
+          return true;
+        }
+
+        return false;
+      }
 
       String hashedPin = _hashPin(pin);
+      debugPrint('verifyPin: сравниваем хешированный PIN');
       return storedPin == hashedPin;
     } catch (e) {
+      debugPrint('verifyPin: ошибка при проверке: $e');
       return false;
     }
   }

@@ -119,14 +119,11 @@ class AppRouter {
               final Map<String, dynamic> extra =
                   state.extra as Map<String, dynamic>? ?? {};
               final String phoneNumber = extra['phoneNumber'] as String? ?? '';
-              final bool isRegistration =
-                  extra['isRegistration'] as bool? ?? false;
               final String verificationId =
                   extra['verificationId'] as String? ?? '';
 
               return SmsCodeScreen(
                 phoneNumber: phoneNumber,
-                isRegistration: isRegistration,
                 verificationId: verificationId,
               );
             },
@@ -344,6 +341,10 @@ class AppRouter {
     final isAuthenticated = _authService.isAuthenticated;
     final location = state.uri.path;
 
+    debugPrint(
+      '_redirectLogic: проверка маршрута $location, аутентификация: $isAuthenticated',
+    );
+
     // Публичные маршруты, доступные без авторизации
     final publicRoutes = ['/home', '/auth', '/auth/sms'];
     final isPublicRoute =
@@ -353,14 +354,21 @@ class AppRouter {
 
     // Если это публичный маршрут, не делаем редирект
     if (isPublicRoute) {
+      debugPrint(
+        '_redirectLogic: публичный маршрут $location, редирект не требуется',
+      );
       return null;
     }
 
     // Проверяем авторизацию для защищенных маршрутов
     if (!isAuthenticated) {
+      debugPrint(
+        '_redirectLogic: пользователь не авторизован, редирект на /auth',
+      );
       return '/auth';
     }
 
+    debugPrint('_redirectLogic: авторизованный доступ к $location разрешен');
     return null; // Нет перенаправления, продолжаем навигацию
   }
 }

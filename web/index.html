@@ -261,9 +261,6 @@
         console.log("Firebase уже был инициализирован ранее");
       }
 
-      // Удаляю настройку reCAPTCHA для Firebase Auth
-      firebase.auth().settings.appVerificationDisabledForTesting = true;
-
       // Сразу устанавливаем настройки Firestore
       initFirestoreSettings();
 
@@ -386,6 +383,14 @@
         console.log("Firebase доступен для Flutter приложения");
       } else {
         console.warn("Firebase не доступен или не инициализирован!");
+      }
+
+      // Автоматически пытаемся исправить проблемы с соединением
+      console.log('Автоматическое исправление проблем с соединением...');
+      if (window.fixCorsIssues) {
+        setTimeout(function() {
+          window.fixCorsIssues();
+        }, 1000);
       }
 
       // Индикатор загрузки

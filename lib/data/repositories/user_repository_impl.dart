@@ -1,6 +1,6 @@
 import 'package:pater/domain/entities/user.dart';
 import 'package:pater/domain/repositories/user_repository.dart';
-import 'package:pater/data/datasources/user_service.dart';
+import 'package:pater/data/services/user_service.dart';
 import 'package:pater/domain/entities/user_role.dart';
 
 class UserRepositoryImpl implements UserRepository {

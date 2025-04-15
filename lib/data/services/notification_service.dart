@@ -8,6 +8,7 @@ import 'package:pater/domain/entities/notification.dart';
 import 'package:pater/data/services/property_service.dart';
 import 'package:pater/data/services/user_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pater/core/auth/account_manager.dart';
 
 /// Сервис для управления уведомлениями в приложении
 class NotificationService {
@@ -30,6 +31,7 @@ class NotificationService {
       firestore: firestore,
       prefs: prefs,
       roleManager: roleManager,
+      accountManager: _createAccountManager(),
     );
   }
 
@@ -944,5 +946,10 @@ class NotificationService {
     } catch (e) {
       debugPrint('Ошибка при отправке уведомления о новом отзыве: $e');
     }
+  }
+
+  /// Создает экземпляр AccountManager
+  AccountManager _createAccountManager() {
+    return AccountManager();
   }
 }

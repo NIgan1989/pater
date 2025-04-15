@@ -153,7 +153,9 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
       final pinCode = _pinController.text;
 
       // Проверяем PIN-код
+      debugPrint('Начинаем проверку PIN-кода: $pinCode');
       final isValid = await _authService.checkPinCode(pinCode);
+      debugPrint('Результат проверки PIN-кода: $isValid');
 
       if (!mounted) return;
 
@@ -161,8 +163,10 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
         _attempts++;
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('pin_auth_attempts', _attempts);
+        debugPrint('Неверный PIN-код. Попытка: $_attempts из $_maxAttempts');
 
         if (_attempts >= _maxAttempts) {
+          debugPrint('Превышено максимальное число попыток');
           await prefs.setBool('skip_pin_auth', true);
           if (mounted) {
             context.go('/auth');
@@ -173,7 +177,9 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
       }
 
       // Выполняем вход
+      debugPrint('Выполняем вход с PIN-кодом');
       final success = await _authService.signInWithPinCode(pinCode);
+      debugPrint('Результат входа: $success');
 
       if (!mounted) return;
 
@@ -185,23 +191,33 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('pin_auth_attempts', 0);
 
+      // Принудительно устанавливаем состояние аутентификации
+      await _authService.forceAuthenticationState(true);
+      debugPrint('Установлен принудительный флаг аутентификации');
+
       // Сохраняем данные аккаунта в AccountManager
       try {
         // Получаем текущего пользователя
         final user = _authService.currentUser;
+        debugPrint('Текущий пользователь: ${user?.id ?? "null"}');
+
         if (user != null) {
           // Создаем аккаунт, если его еще нет в системе
           final accountExists = await _accountManager.accountExists(user.id);
+          debugPrint('Аккаунт существует: $accountExists');
 
           if (!accountExists) {
             await _accountManager.createAccount(
               user.id,
               user.role.toString().split('.').last,
             );
+            debugPrint('Создан новый аккаунт');
           }
 
           // Создаем объект аккаунта для установки как последнего использованного
           final accounts = await _accountManager.loadAccounts();
+          debugPrint('Загружено аккаунтов: ${accounts.length}');
+
           final account = accounts.firstWhere(
             (a) =>
                 a['id'] == user.id &&
@@ -211,17 +227,23 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
 
           // Устанавливаем последний использованный аккаунт
           await _accountManager.setLastAccount(account['id']);
+          debugPrint(
+            'Установлен последний использованный аккаунт: ${account['id']}',
+          );
 
           // Проверяем, есть ли у пользователя разные роли
           final userRoles = await _roleManager.getUserRoles(user.id);
+          debugPrint('Роли пользователя: $userRoles');
 
           // Устанавливаем активную роль
           if (userRoles.contains(user.role)) {
             await _roleManager.setActiveRole(user.role);
+            debugPrint('Установлена активная роль: ${user.role}');
           } else if (userRoles.isNotEmpty) {
             // Если текущая роль пользователя не совпадает с сохраненными ролями,
             // устанавливаем первую доступную роль как активную
             await _roleManager.setActiveRole(userRoles.first);
+            debugPrint('Установлена первая доступная роль: ${userRoles.first}');
           }
         }
       } catch (e) {
@@ -231,9 +253,11 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
 
       if (!mounted) return;
 
-      // Переходим на домашнюю страницу
-      context.go('/home');
+      // Переходим на домашнюю страницу, используя pushReplacement для замены текущего маршрута
+      debugPrint('Переход на домашнюю страницу');
+      context.pushReplacement('/home');
     } catch (e) {
+      debugPrint('Ошибка при проверке PIN-кода: $e');
       if (!mounted) return;
       setState(() {
         _errorMessage = e.toString();

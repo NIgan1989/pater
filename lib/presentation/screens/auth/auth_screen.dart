@@ -7,6 +7,7 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
 import 'package:get_it/get_it.dart';
 import 'dart:math' as math;
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Экран авторизации в приложении
 class AuthScreen extends StatefulWidget {
@@ -21,7 +22,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   final _authService = GetIt.instance.get<AuthService>();
-  final _accountManager = AccountManager();
+  final _accountManager = GetIt.instance.get<AccountManager>();
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -57,87 +58,78 @@ class _AuthScreenState extends State<AuthScreen> {
       // Проверяем, существует ли пользователь с таким номером
       final userExists = await _authService.checkUserExistsByPhone(phoneNumber);
 
-      if (userExists) {
-        debugPrint('Пользователь существует, перенаправляем на экран PIN-кода');
+      // Для входа проверяем, что пользователь существует
+      if (!userExists) {
+        throw Exception('Пользователь с таким номером телефона не найден');
+      }
 
-        // Выполняем вход по номеру телефона без SMS
-        final user = await _authService.signInWithPhoneNumber(phoneNumber);
+      // Отправляем SMS или создаем пользователя
+      debugPrint('Пользователь существует, перенаправляем на экран PIN-кода');
 
-        if (user == null) {
-          throw Exception('Ошибка при авторизации');
-        }
+      // Выполняем вход по номеру телефона без SMS
+      final user = await _authService.signInWithPhoneNumber(phoneNumber);
 
-        // Проверяем, есть ли PIN-код
-        final hasPinCode = _authService.hasPinCode();
+      if (user == null) {
+        throw Exception('Ошибка при авторизации');
+      }
 
-        // Если PIN нет, устанавливаем временный
-        if (!hasPinCode) {
-          debugPrint(
-            'У пользователя нет PIN-кода, устанавливаем временный случайный PIN-код',
-          );
-          // Генерируем случайный PIN-код вместо фиксированного значения
-          final random = math.Random.secure();
-          final tempPin = List.generate(4, (_) => random.nextInt(10)).join();
+      // Проверяем, есть ли PIN-код
+      final hasPinCode = _authService.hasPinCode();
 
-          await _authService.savePinCode(tempPin);
+      // Если PIN нет, устанавливаем временный
+      if (!hasPinCode) {
+        debugPrint(
+          'У пользователя нет PIN-кода, устанавливаем временный случайный PIN-код',
+        );
+        // Генерируем случайный PIN-код вместо фиксированного значения
+        final random = math.Random.secure();
+        final tempPin = List.generate(4, (_) => random.nextInt(10)).join();
 
-          // Показываем временный PIN пользователю
-          if (!mounted) return;
+        await _authService.savePinCode(tempPin);
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ваш временный PIN-код: $tempPin'),
-              duration: const Duration(seconds: 10),
-              action: SnackBarAction(label: 'OK', onPressed: () {}),
-            ),
-          );
-        }
+        // Также сохраняем временный PIN-код напрямую для упрощения проверки
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('temp_pin', tempPin);
+        debugPrint('Временный PIN-код сохранен отдельно: $tempPin');
 
-        // Создаем или обновляем аккаунт в системе мультиаккаунта
-        try {
-          final accountExists = await _accountManager.accountExists(user.id);
-
-          if (!accountExists) {
-            // Получаем роль пользователя и преобразуем в строку
-            final userRole = await _authService.getCurrentUserRole();
-            final roleStr = userRole.toString().split('.').last;
-
-            // Передаем id и строковое представление роли
-            await _accountManager.createAccount(user.id, roleStr);
-            debugPrint('Создан новый аккаунт для пользователя ${user.id}');
-          } else {
-            debugPrint('Аккаунт пользователя ${user.id} уже существует');
-          }
-        } catch (e) {
-          debugPrint('Ошибка при работе с аккаунтом: $e');
-          // Продолжаем вход даже если не удалось сохранить данные аккаунта
-        }
-
-        // Сохраним данные для PIN-экрана
-        final pinData = {'userId': user.id, 'phoneNumber': user.phoneNumber};
-
-        // Проверим, что контекст всё ещё привязан
-        if (mounted) {
-          context.push('/auth/pin', extra: pinData);
-        }
-      } else {
-        debugPrint('Пользователь не существует, отправляем код SMS');
-
-        // Для новой версии API используем signInWithPhoneNumber вместо sendPhoneVerificationCode
-        await _authService.signInWithPhoneNumber(phoneNumber);
-
-        // Если метод вернул null, это обычно означает, что SMS отправлен
+        // Показываем временный PIN пользователю
         if (!mounted) return;
 
-        setState(() {
-          _isLoading = false;
-        });
-
-        // Переходим на экран ввода кода из SMS
-        context.go(
-          '/auth/sms',
-          extra: {'phoneNumber': phoneNumber, 'isRegistration': true},
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ваш временный PIN-код: $tempPin'),
+            duration: const Duration(seconds: 10),
+            action: SnackBarAction(label: 'OK', onPressed: () {}),
+          ),
         );
+      }
+
+      // Создаем или обновляем аккаунт в системе мультиаккаунта
+      try {
+        final accountExists = await _accountManager.accountExists(user.id);
+
+        if (!accountExists) {
+          // Получаем роль пользователя и преобразуем в строку
+          final userRole = await _authService.getCurrentUserRole();
+          final roleStr = userRole.toString().split('.').last;
+
+          // Передаем id и строковое представление роли
+          await _accountManager.createAccount(user.id, roleStr);
+          debugPrint('Создан новый аккаунт для пользователя ${user.id}');
+        } else {
+          debugPrint('Аккаунт пользователя ${user.id} уже существует');
+        }
+      } catch (e) {
+        debugPrint('Ошибка при работе с аккаунтом: $e');
+        // Продолжаем вход даже если не удалось сохранить данные аккаунта
+      }
+
+      // Сохраним данные для PIN-экрана
+      final pinData = {'userId': user.id, 'phoneNumber': user.phoneNumber};
+
+      // Проверим, что контекст всё ещё привязан
+      if (mounted) {
+        context.push('/auth/pin', extra: pinData);
       }
     } catch (e) {
       debugPrint('Ошибка при отправке кода: $e');
@@ -163,10 +155,7 @@ class _AuthScreenState extends State<AuthScreen> {
         showBackButton: true,
         onBackPressed: () => context.go('/home'),
         actions: [
-          TextButton(
-            onPressed: () => context.go('/auth/register'),
-            child: const Text('РЕГИСТРАЦИЯ'),
-          ),
+          // Удаляем кнопку регистрации, так как нет экрана регистрации
         ],
       ),
       body: Stack(
@@ -293,27 +282,26 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: ElevatedButton(
                                 onPressed: _isLoading ? null : _sendSmsCode,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.primaryColor,
+                                  minimumSize: const Size(double.infinity, 50),
+                                  backgroundColor: AppConstants.blue,
+                                  foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
                                 child:
                                     _isLoading
                                         ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
+                                          width: 24,
+                                          height: 24,
                                           child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                  Colors.white,
-                                                ),
+                                            strokeWidth: 2.5,
+                                            color: Colors.white,
                                           ),
                                         )
-                                        : const Text(
+                                        : Text(
                                           'ВОЙТИ',
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
                                           ),
