@@ -33,7 +33,7 @@ enum PropertyFilterType {
 class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
     with SingleTickerProviderStateMixin {
   final PropertyService _propertyService = PropertyService();
-  late final AuthService _authService;
+  AuthService? _authService;
   late TabController _tabController;
 
   List<Property> _activeProperties = [];
@@ -48,8 +48,24 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _authService = getIt<AuthService>();
+    _tabController = TabController(length: 2, vsync: this);
+
+    try {
+      // Получаем сервис через GetIt
+      _authService = getIt<AuthService>();
+      debugPrint('AuthService инициализирован успешно');
+    } catch (e) {
+      debugPrint('Ошибка при получении AuthService: $e');
+      // В случае ошибки показываем сообщение пользователю
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Ошибка инициализации: $e';
+          });
+        }
+      });
+    }
+
     _loadProperties();
 
     // Обработчик изменения вкладки
@@ -61,9 +77,6 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
               _currentFilter = PropertyFilterType.active;
               break;
             case 1:
-              _currentFilter = PropertyFilterType.inactive;
-              break;
-            case 2:
               _currentFilter = PropertyFilterType.archived;
               break;
           }
@@ -86,9 +99,19 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
     });
 
     try {
+      // Проверяем, инициализирован ли AuthService
+      if (_authService == null) {
+        debugPrint('AuthService не инициализирован');
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Сервис авторизации не доступен';
+        });
+        return;
+      }
+
       // Получаем ID текущего пользователя
-      final userId = _authService.currentUser?.id;
-      if (userId == null) {
+      final userId = _authService!.currentUser?.id;
+      if (userId == null || userId.isEmpty) {
         setState(() {
           _isLoading = false;
           _errorMessage = 'Пользователь не авторизован';
@@ -135,9 +158,9 @@ class _OwnerPropertiesScreenState extends State<OwnerPropertiesScreen>
 
   /// Редактирует существующее объявление
   void _editProperty(String propertyId) {
-    // Используем именованный маршрут с параметром id
+    // Используем именованный маршрут с параметром propertyId
     context
-        .pushNamed('edit_property', pathParameters: {'id': propertyId})
+        .pushNamed('edit_property', pathParameters: {'propertyId': propertyId})
         .then((_) => _loadProperties());
   }
 

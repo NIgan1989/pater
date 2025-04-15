@@ -147,7 +147,7 @@ class RoleManager {
       case UserRole.client:
         return 'Клиент';
       case UserRole.cleaner:
-        return 'Уборщик';
+        return 'Клининг';
       case UserRole.owner:
         return 'Владелец';
       case UserRole.admin:
@@ -160,11 +160,11 @@ class RoleManager {
   String getRoleDescription(UserRole role) {
     switch (role) {
       case UserRole.client:
-        return 'Заказчик услуг по уборке';
+        return 'Бронирование жилья и доступ к каталогу объектов';
       case UserRole.cleaner:
-        return 'Исполнитель услуг по уборке';
+        return 'Управление заявками на уборку и календарь работ';
       case UserRole.owner:
-        return 'Владелец недвижимости';
+        return 'Управление объектами недвижимости и бронированиями';
       case UserRole.admin:
         return 'Администратор системы';
       case UserRole.support:

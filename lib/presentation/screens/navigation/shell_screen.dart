@@ -30,6 +30,34 @@ class _ShellScreenState extends State<ShellScreen> {
   void initState() {
     super.initState();
     _user = _authService.currentUser;
+    _authService.addListener(_onAuthStateChanged);
+  }
+
+  @override
+  void dispose() {
+    _authService.removeListener(_onAuthStateChanged);
+    super.dispose();
+  }
+
+  void _onAuthStateChanged() {
+    final currentUser = _authService.currentUser;
+    if (_user?.id != currentUser?.id || _user?.role != currentUser?.role) {
+      setState(() {
+        _user = currentUser;
+      });
+
+      // Если изменилась роль пользователя, но не сам ID (т.е. тот же пользователь),
+      // перенаправляем на главный экран для новой роли, чтобы обновить контент
+      if (_user?.id == currentUser?.id && _user?.role != currentUser?.role) {
+        debugPrint(
+          'Роль пользователя изменилась. Обновляем интерфейс для роли: ${currentUser?.role}',
+        );
+        // Переходим на главный экран
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          context.go('/home');
+        });
+      }
+    }
   }
 
   @override
@@ -37,7 +65,7 @@ class _ShellScreenState extends State<ShellScreen> {
     super.didChangeDependencies();
     // Обновляем пользователя при изменении зависимостей
     final currentUser = _authService.currentUser;
-    if (_user?.id != currentUser?.id) {
+    if (_user?.id != currentUser?.id || _user?.role != currentUser?.role) {
       setState(() {
         _user = currentUser;
       });
@@ -66,25 +94,33 @@ class _ShellScreenState extends State<ShellScreen> {
         break;
       case 1: // Бронирования/Объекты/Уборки
         if (role == UserRole.client) {
-          context.goNamed('all_bookings');
+          context.go('/bookings');
         } else if (role == UserRole.owner) {
-          context.goNamed('properties_list');
+          context.go('/properties');
         } else if (role == UserRole.cleaner) {
-          context.goNamed('cleaner_workboard');
+          context.go('/cleanings');
+        } else if (role == UserRole.support) {
+          // Для роли поддержки показываем тикеты поддержки
+          context.go('/profile/support');
+        } else if (role == UserRole.admin) {
+          // Для роли админа показываем экран управления
+          context.go('/bookings');
         }
         break;
-      case 2: // Избранное (для клинера - расписание)
+      case 2: // Избранное или Бронирования объектов (зависит от роли)
         if (role == UserRole.cleaner) {
-          context.goNamed('booking_calendar');
+          context.go('/calendar');
+        } else if (role == UserRole.owner) {
+          context.go('/owner-bookings');
         } else {
-          context.goNamed('favorites');
+          context.go('/favorites');
         }
         break;
       case 3: // Сообщения
-        context.goNamed('messages');
+        context.go('/messages');
         break;
       case 4: // Профиль
-        context.goNamed('profile');
+        context.go('/profile');
         break;
     }
   }

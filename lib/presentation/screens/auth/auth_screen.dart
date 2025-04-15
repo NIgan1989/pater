@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/core/auth/account_manager.dart';
-import 'package:pater/core/constants/app_constants.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:pater/presentation/widgets/app_bar/custom_app_bar.dart';
 import 'package:get_it/get_it.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Экран авторизации в приложении
 class AuthScreen extends StatefulWidget {
@@ -61,40 +62,103 @@ class _AuthScreenState extends State<AuthScreen> {
         throw Exception('Пользователь с таким номером телефона не найден');
       }
 
+      // Получаем ID пользователя напрямую из Firestore по номеру телефона
+      String userId = '';
+      try {
+        // Нормализуем номер телефона
+        String normalizedPhone = phoneNumber.replaceAll(
+          RegExp(r'[\s\(\)\-]'),
+          '',
+        );
+        if (normalizedPhone.startsWith('+')) {
+          normalizedPhone = normalizedPhone.substring(1);
+        }
+
+        // Поиск пользователя в Firestore
+        final querySnapshot =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .where('phoneNumber', isEqualTo: normalizedPhone)
+                .limit(1)
+                .get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          userId = querySnapshot.docs.first.id;
+          debugPrint('Найден ID пользователя в Firestore: $userId');
+
+          // Сохраняем ID для использования в других экранах
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('user_id', userId);
+          await prefs.setString('temp_user_id', userId);
+        } else {
+          // Альтернативный поиск по другому полю
+          final altQuery =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .where('phone_number', isEqualTo: normalizedPhone)
+                  .limit(1)
+                  .get();
+
+          if (altQuery.docs.isNotEmpty) {
+            userId = altQuery.docs.first.id;
+            debugPrint(
+              'Найден ID пользователя в Firestore (альтернативный поиск): $userId',
+            );
+
+            // Сохраняем ID
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('user_id', userId);
+            await prefs.setString('temp_user_id', userId);
+          } else {
+            debugPrint('Пользователь не найден в Firestore по номеру телефона');
+          }
+        }
+      } catch (e) {
+        debugPrint('Ошибка при поиске пользователя в Firestore: $e');
+      }
+
       // Отправляем SMS или создаем пользователя
       debugPrint('Пользователь существует, перенаправляем на экран PIN-кода');
 
       // Выполняем вход по номеру телефона без SMS
-      final errorMessage = await _authService.signInWithPhoneNumber(phoneNumber);
+      final errorMessage = await _authService.signInWithPhoneNumber(
+        phoneNumber,
+      );
 
       if (errorMessage != null) {
         throw Exception(errorMessage);
       }
 
-      // Получаем ID пользователя 
-      final userId = _authService.getUserId() ?? '';
-      
+      // Получаем ID пользователя (используем уже найденный или запрашиваем из сервиса)
+      userId = userId.isNotEmpty ? userId : (_authService.getUserId() ?? '');
+
+      // Если ID все еще пустой, пробуем получить из SharedPreferences
+      if (userId.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        userId =
+            prefs.getString('user_id') ?? prefs.getString('temp_user_id') ?? '';
+        debugPrint('Используем ID пользователя из SharedPreferences: $userId');
+      }
+
       // Проверяем, есть ли PIN-код
       final hasPinCode = _authService.hasPinCode();
 
       // Если PIN нет, устанавливаем временный
       if (!hasPinCode) {
         debugPrint(
-          'У пользователя нет PIN-кода, запрашиваем установку нового PIN-кода',
+          'У пользователя нет PIN-кода, перенаправляем на экран создания PIN-кода',
         );
-        
-        // Сохраним данные для PIN-экрана с пометкой, что нужно установить PIN
+
+        // Сохраним данные для экрана создания PIN
         final pinData = {
-          'extra': {
-            'userId': userId, 
-            'phoneNumber': phoneNumber,
-            'setupPin': true
-          }
+          'extra': {'userId': userId, 'phoneNumber': phoneNumber},
         };
+
+        debugPrint('Передаем на экран создания PIN: userId=$userId');
 
         // Проверим, что контекст всё ещё привязан
         if (mounted) {
-          context.push('/auth/pin', extra: pinData);
+          context.push('/auth/create-pin', extra: pinData);
         }
         return;
       }
@@ -121,10 +185,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       // Сохраним данные для PIN-экрана
       final pinData = {
-        'extra': {
-          'userId': userId, 
-          'phoneNumber': phoneNumber
-        }
+        'extra': {'userId': userId, 'phoneNumber': phoneNumber},
       };
 
       // Проверим, что контекст всё ещё привязан
@@ -154,9 +215,7 @@ class _AuthScreenState extends State<AuthScreen> {
         isAuthScreen: true,
         showBackButton: true,
         onBackPressed: () => context.go('/home'),
-        actions: [
-          // Удаляем кнопку регистрации, так как нет экрана регистрации
-        ],
+        actions: [],
       ),
       body: Stack(
         children: [
@@ -168,7 +227,7 @@ class _AuthScreenState extends State<AuthScreen> {
             height: size.height * 0.4,
             child: Container(
               decoration: BoxDecoration(
-                color: AppConstants.darkBlue,
+                color: theme.primaryColor,
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(30),
                   bottomRight: Radius.circular(30),
@@ -180,11 +239,11 @@ class _AuthScreenState extends State<AuthScreen> {
                     top: size.height * 0.12,
                     left: 0,
                     right: 0,
-                    child: const Center(
+                    child: Center(
                       child: Icon(
                         Icons.lock_outline_rounded,
                         size: 70,
-                        color: Colors.white,
+                        color: theme.colorScheme.onPrimary,
                       ),
                     ),
                   ),
@@ -192,14 +251,13 @@ class _AuthScreenState extends State<AuthScreen> {
                     top: size.height * 0.22,
                     left: 0,
                     right: 0,
-                    child: const Center(
+                    child: Center(
                       child: Text(
                         "ВХОД",
-                        style: TextStyle(
-                          fontSize: 24,
+                        style: theme.textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           letterSpacing: 2.0,
-                          color: Colors.white,
+                          color: theme.colorScheme.onPrimary,
                         ),
                       ),
                     ),
@@ -223,11 +281,11 @@ class _AuthScreenState extends State<AuthScreen> {
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: theme.cardColor,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withAlpha(13),
+                            color: theme.shadowColor.withAlpha(26),
                             blurRadius: 20,
                             offset: const Offset(0, 5),
                           ),
@@ -240,10 +298,8 @@ class _AuthScreenState extends State<AuthScreen> {
                           children: [
                             Text(
                               'Введите ваш номер телефона',
-                              style: TextStyle(
-                                fontSize: 16,
+                              style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w500,
-                                color: theme.primaryColor,
                               ),
                             ),
                             const SizedBox(height: 20),
@@ -254,9 +310,19 @@ class _AuthScreenState extends State<AuthScreen> {
                               decoration: InputDecoration(
                                 labelText: 'Номер телефона',
                                 hintText: '+7 (___) ___-__-__',
-                                prefixIcon: const Icon(Icons.phone),
+                                prefixIcon: Icon(
+                                  Icons.phone,
+                                  color: theme.primaryColor,
+                                ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: theme.primaryColor,
+                                    width: 2,
+                                  ),
                                 ),
                                 errorText: _errorMessage,
                               ),
@@ -283,25 +349,26 @@ class _AuthScreenState extends State<AuthScreen> {
                                 onPressed: _isLoading ? null : _sendSmsCode,
                                 style: ElevatedButton.styleFrom(
                                   minimumSize: const Size(double.infinity, 50),
-                                  backgroundColor: AppConstants.blue,
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: theme.primaryColor,
+                                  foregroundColor: theme.colorScheme.onPrimary,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
+                                  elevation: 2,
                                 ),
                                 child:
                                     _isLoading
-                                        ? const SizedBox(
+                                        ? SizedBox(
                                           width: 24,
                                           height: 24,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2.5,
-                                            color: Colors.white,
+                                            color: theme.colorScheme.onPrimary,
                                           ),
                                         )
                                         : Text(
                                           'ВОЙТИ',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -319,10 +386,9 @@ class _AuthScreenState extends State<AuthScreen> {
                     Text(
                       'Войдите, чтобы получить доступ ко всем функциям приложения',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.textTheme.bodyMedium?.color?.withAlpha(
-                          178, // 0.7 * 255 = 178
+                          178,
                         ),
                       ),
                     ),
@@ -333,35 +399,6 @@ class _AuthScreenState extends State<AuthScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Экран подтверждения SMS-кода
-class SmsConfirmationScreen extends StatefulWidget {
-  final String phoneNumber;
-  final String verificationId;
-  final int? forceResendingToken;
-
-  const SmsConfirmationScreen({
-    super.key,
-    required this.phoneNumber,
-    required this.verificationId,
-    this.forceResendingToken,
-  });
-
-  @override
-  State<SmsConfirmationScreen> createState() => SmsConfirmationScreenState();
-}
-
-class SmsConfirmationScreenState extends State<SmsConfirmationScreen> {
-  // Add any necessary state variables here
-
-  @override
-  Widget build(BuildContext context) {
-    // Implement the build method for the SmsConfirmationScreen
-    return Scaffold(
-      // Implement the layout for the SmsConfirmationScreen
     );
   }
 }

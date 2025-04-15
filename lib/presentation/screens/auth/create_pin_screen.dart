@@ -5,18 +5,30 @@ import 'package:pater/presentation/widgets/auth/pin_code_input.dart';
 import 'package:pater/presentation/widgets/common/error_message.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:pater/core/di/service_locator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Экран создания PIN-кода для входа
 class CreatePinScreen extends StatefulWidget {
-  const CreatePinScreen({super.key});
+  final String? userId;
+  final String? phoneNumber;
+
+  const CreatePinScreen({super.key, this.userId, this.phoneNumber});
 
   @override
   State<CreatePinScreen> createState() => _CreatePinScreenState();
 }
 
 class _CreatePinScreenState extends State<CreatePinScreen> {
-  final TextEditingController _pinController = TextEditingController();
+  // Обертка для контроллера, которая блокирует доступ после dispose
+  final _pinControllerWrapper = _SafeTextEditingController(
+    TextEditingController(),
+  );
+
   late final AuthService _authService;
+
+  String _userId = '';
+  // ignore: unused_field
+  String _phoneNumber = '';
 
   bool _obscurePin = true;
   bool _isPinCreated = false;
@@ -29,12 +41,60 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
   void initState() {
     super.initState();
     _authService = getIt<AuthService>();
+
+    // Инициализируем userId и phoneNumber из параметров или получаем из сервиса
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    _userId = widget.userId ?? '';
+    _phoneNumber = widget.phoneNumber ?? '';
+
+    // Если userId не был передан, пробуем получить из AuthService или SharedPreferences
+    if (_userId.isEmpty) {
+      _userId = _authService.getUserId() ?? '';
+
+      if (_userId.isEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          _userId =
+              prefs.getString('user_id') ??
+              prefs.getString('temp_user_id') ??
+              prefs.getString('last_user_id') ??
+              '';
+
+          if (_userId.isNotEmpty) {
+            debugPrint('Получен userId из SharedPreferences: $_userId');
+          }
+        } catch (e) {
+          debugPrint('Ошибка при получении userId из SharedPreferences: $e');
+        }
+      } else {
+        debugPrint('Получен userId из AuthService: $_userId');
+      }
+    } else {
+      debugPrint('Использован userId из параметров: $_userId');
+
+      // Сохраняем ID пользователя для последующего использования
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_id', _userId);
+        await prefs.setString('temp_user_id', _userId);
+        await prefs.setString('last_user_id', _userId);
+      } catch (e) {
+        debugPrint('Ошибка при сохранении userId: $e');
+      }
+    }
   }
 
   @override
   void dispose() {
+    // Сначала устанавливаем флаг, чтобы другие методы знали, что State уничтожается
     _isDisposed = true;
-    _pinController.dispose();
+
+    // Безопасное уничтожение контроллера
+    _pinControllerWrapper.dispose();
+
     super.dispose();
   }
 
@@ -46,52 +106,95 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
   }
 
   /// Обработчик успешного создания PIN-кода
-  void _onPinCreated() async {
+  Future<void> _onPinCreated() async {
+    if (_isDisposed) return; // Ранний выход, если виджет уже уничтожен
+
     try {
-      final userId = _authService.getUserId();
-      if (userId == null) {
+      if (_userId.isEmpty) {
         _safeSetState(() {
           _errorMessage = 'Ошибка: ID пользователя не найден';
         });
+        debugPrint('CreatePinScreen: Ошибка - ID пользователя пустой');
         return;
       }
 
+      debugPrint(
+        'CreatePinScreen: Сохранение PIN-кода для пользователя: $_userId',
+      );
+
+      // Сохраняем информацию, необходимую для навигации
+      final currentRole = _authService.currentUser?.role;
+      final navigateToHome = currentRole != null;
+
       await _authService.savePinCode(_firstPin!);
 
-      _safeSetState(() {
-        _isPinCreated = true;
-      });
+      // Сохраняем состояние аутентификации
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_authenticated', true);
+        await prefs.setString('user_id', _userId);
+        await _authService.forceAuthenticationState(true);
+        debugPrint(
+          'CreatePinScreen: Состояние аутентификации сохранено для $_userId',
+        );
 
-      // Задержка перед переходом
-      await Future.delayed(const Duration(seconds: 1));
+        // Обновляем состояние аутентификации
+        await _authService.refreshAuthenticationState();
+      } catch (e) {
+        debugPrint(
+          'CreatePinScreen: Ошибка при сохранении состояния аутентификации: $e',
+        );
+      }
 
-      final role = _authService.currentUser?.role;
-
-      // Проверяем, что виджет все еще существует перед навигацией
+      // Используем сохраненный контекст только после проверки, что виджет все еще активен
       if (mounted && !_isDisposed) {
-        if (role != null) {
-          context.go('/home');
-        } else {
-          context.go('/');
+        _safeSetState(() {
+          _isPinCreated = true;
+        });
+
+        // Задержка перед переходом
+        await Future.delayed(const Duration(seconds: 1));
+
+        // Теперь используем переменную navigateToHome, а не запрашиваем роль снова
+        if (mounted && !_isDisposed) {
+          try {
+            // Используем context напрямую - он безопасен, так как проверили mounted
+            final router = GoRouter.of(context);
+            if (navigateToHome) {
+              debugPrint('CreatePinScreen: Переход на /home');
+              router.go('/home');
+            } else {
+              debugPrint('CreatePinScreen: Переход на /');
+              router.go('/');
+            }
+          } catch (e) {
+            debugPrint('CreatePinScreen: Ошибка при навигации: $e');
+          }
         }
       }
     } catch (e) {
-      _safeSetState(() {
-        _errorMessage = 'Ошибка: $e';
-      });
+      if (mounted && !_isDisposed) {
+        _safeSetState(() {
+          _errorMessage = 'Ошибка: $e';
+        });
+      }
+      debugPrint('CreatePinScreen: Ошибка создания PIN-кода: $e');
     }
   }
 
   /// Очищает поле ввода PIN-кода
   void _clearField() {
     if (!_isDisposed) {
-      _pinController.clear();
+      _pinControllerWrapper.clear();
     }
   }
 
   /// Проверяет введенный PIN-код
   void _verifyAndSavePin() {
-    final pin = _pinController.text;
+    if (_isDisposed) return; // Ранний выход, если виджет уже уничтожен
+
+    final pin = _pinControllerWrapper.text;
+    if (pin.isEmpty) return;
 
     // Проверка на простые PIN-коды
     final simplePins = [
@@ -143,26 +246,62 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
   }
 
   /// Пропускает создание PIN-кода
-  void _skipPinCreation() async {
-    // Просто переходим на главный экран без создания PIN
-    if (mounted && !_isDisposed) {
-      context.goNamed('home');
+  Future<void> _skipPinCreation() async {
+    if (_isDisposed || !mounted) return;
+
+    try {
+      debugPrint(
+        'CreatePinScreen: Пропускаем создание PIN, переход на главный экран',
+      );
+
+      await _authService.forceAuthenticationState(true);
+
+      // Обновляем состояние аутентификации
+      await _authService.refreshAuthenticationState();
+
+      // Проверяем еще раз перед навигацией
+      if (mounted && !_isDisposed) {
+        try {
+          // Используем context напрямую - он безопасен, так как проверили mounted
+          final router = GoRouter.of(context);
+          router.goNamed('home');
+        } catch (e) {
+          debugPrint('CreatePinScreen: Ошибка при навигации: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('CreatePinScreen: Ошибка при пропуске создания PIN: $e');
     }
   }
 
-  void _onCancel() {
-    if (!_isDisposed) {
-      _pinController.clear();
-    }
-    _errorMessage = null;
+  Future<void> _onCancel() async {
+    if (_isDisposed || !mounted) return;
 
-    if (mounted && !_isDisposed) {
-      context.go('/');
+    try {
+      _pinControllerWrapper.clear();
+      _errorMessage = null;
+
+      // Выполняем навигацию сразу, без асинхронных операций
+      debugPrint(
+        'CreatePinScreen: Отмена создания PIN, возврат на предыдущий экран',
+      );
+      try {
+        GoRouter.of(context).go('/');
+      } catch (e) {
+        debugPrint('CreatePinScreen: Ошибка при навигации: $e');
+      }
+    } catch (e) {
+      debugPrint('CreatePinScreen: Ошибка при отмене: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isDisposed) {
+      // Если State уже помечен как уничтоженный, возвращаем пустой контейнер
+      return Container();
+    }
+
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -290,15 +429,13 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
                     children: [
                       // Поле ввода PIN-кода
                       PinCodeInput(
-                        controller: _pinController,
+                        controller: _pinControllerWrapper.controller,
                         onCompleted: (value) {
-                          if (_step == 0) {
-                            _verifyAndSavePin();
-                          } else {
-                            _verifyAndSavePin();
-                          }
+                          if (_isDisposed) return;
+                          _verifyAndSavePin();
                         },
                         onChanged: (_) {
+                          if (_isDisposed) return;
                           if (_errorMessage != null) {
                             _safeSetState(() {
                               _errorMessage = null;
@@ -324,6 +461,7 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
                               color: Colors.grey.shade600,
                             ),
                             onPressed: () {
+                              if (_isDisposed) return;
                               _safeSetState(() {
                                 _obscurePin = !_obscurePin;
                               });
@@ -360,6 +498,7 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
                               onPressed:
                                   _step == 1
                                       ? () {
+                                        if (_isDisposed) return;
                                         _safeSetState(() {
                                           _step = 0;
                                           _errorMessage = null;
@@ -458,5 +597,58 @@ class _CreatePinScreenState extends State<CreatePinScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Безопасная обертка для TextEditingController, предотвращающая использование после удаления
+class _SafeTextEditingController {
+  TextEditingController? _controller;
+  bool _isDisposed = false;
+
+  _SafeTextEditingController(TextEditingController controller) {
+    _controller = controller;
+  }
+
+  TextEditingController get controller {
+    if (_isDisposed || _controller == null) {
+      // Возвращаем временный контроллер, если основной уже уничтожен
+      debugPrint('⚠️ Попытка доступа к уничтоженному контроллеру');
+      return TextEditingController();
+    }
+    return _controller!;
+  }
+
+  String get text =>
+      _isDisposed || _controller == null ? '' : _controller!.text;
+
+  void clear() {
+    if (!_isDisposed && _controller != null) {
+      try {
+        _controller!.clear();
+      } catch (e) {
+        debugPrint('Ошибка при очистке PIN-контроллера: $e');
+      }
+    }
+  }
+
+  void dispose() {
+    if (!_isDisposed && _controller != null) {
+      // Сначала помечаем как уничтоженный, чтобы блокировать дальнейший доступ
+      _isDisposed = true;
+
+      // Сохраняем ссылку на контроллер и обнуляем поле
+      final controllerToDispose = _controller;
+      _controller = null;
+
+      // Выполняем dispose в отдельном микротаске,
+      // чтобы отсоединить его от текущего цикла событий
+      Future.microtask(() {
+        try {
+          controllerToDispose?.dispose();
+        } catch (e) {
+          debugPrint('Ошибка при уничтожении PIN-контроллера: $e');
+        }
+      });
+    }
   }
 }

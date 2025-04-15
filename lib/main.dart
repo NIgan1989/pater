@@ -13,6 +13,7 @@ import 'package:pater/data/services/property_service.dart';
 import 'package:pater/data/services/notification_service.dart';
 import 'package:pater/core/di/service_locator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Инициализирует Firebase
 Future<void> initializeFirebase() async {
@@ -21,6 +22,13 @@ Future<void> initializeFirebase() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    // Отключаем reCAPTCHA для мобильной авторизации
+    if (!kIsWeb) {
+      FirebaseAuth.instance.setSettings(
+        appVerificationDisabledForTesting: true,
+      );
+    }
 
     debugPrint('Firebase успешно инициализирован');
 

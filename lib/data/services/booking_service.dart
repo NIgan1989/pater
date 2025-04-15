@@ -12,6 +12,7 @@ import 'package:pater/data/services/notification_service.dart';
 import 'package:pater/data/services/user_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pater/core/di/service_locator.dart';
+import 'package:pater/data/services/payment_service.dart';
 
 /// Сервис для работы с бронированиями
 class BookingService {
@@ -19,7 +20,7 @@ class BookingService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   PropertyService _propertyService = PropertyService();
-  final bool _isInitialized = false;
+  bool _isInitialized = false;
   late final AuthService _authService;
   late final NotificationService _notificationService;
   final CleaningService _cleaningService = CleaningService();
@@ -34,14 +35,33 @@ class BookingService {
 
   /// Инициализирует сервис и его зависимости
   Future<void> initializeDependencies() async {
+    if (_isInitialized) {
+      debugPrint('BookingService уже инициализирован');
+      return;
+    }
+
     // Инициализируем PropertyService через GetIt
     _propertyService = getIt<PropertyService>();
 
-    // Инициализируем AuthService через GetIt
-    _authService = getIt<AuthService>();
+    try {
+      // Инициализируем AuthService через GetIt
+      _authService = getIt<AuthService>();
+      debugPrint('AuthService успешно инициализирован');
+    } catch (e) {
+      debugPrint('Ошибка при инициализации AuthService: $e');
+      rethrow;
+    }
 
-    // Инициализируем NotificationService через GetIt
-    _notificationService = getIt<NotificationService>();
+    try {
+      // Инициализируем NotificationService через GetIt
+      _notificationService = getIt<NotificationService>();
+      debugPrint('NotificationService успешно инициализирован');
+    } catch (e) {
+      debugPrint('Ошибка при инициализации NotificationService: $e');
+      rethrow;
+    }
+
+    _isInitialized = true;
   }
 
   /// Инициализирует сервис
@@ -58,6 +78,7 @@ class BookingService {
       );
     } catch (e) {
       debugPrint('Ошибка при инициализации сервиса бронирований: $e');
+      rethrow;
     }
   }
 
@@ -732,6 +753,40 @@ class BookingService {
       // Обновляем статус объекта
       await _updatePropertyStatusAfterPayment(booking.propertyId);
 
+      // Создаем запись о транзакции в коллекции payment_transactions
+      final transactionId = DateTime.now().millisecondsSinceEpoch.toString();
+      await _firestore
+          .collection('payment_transactions')
+          .doc(transactionId)
+          .set({
+            'id': transactionId,
+            'bookingId': bookingId,
+            'userId': user.id,
+            'amount': booking.totalPrice,
+            'method': 'card', // По умолчанию используем карту как метод оплаты
+            'status': 'completed',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+      debugPrint('Создана платежная транзакция: $transactionId');
+
+      try {
+        // Получаем сервис платежей для создания чека
+        final paymentService = getIt<PaymentService>();
+
+        // Создаем чек оплаты
+        final receipt = await paymentService.confirmPayment(
+          transactionId: transactionId,
+          bookingId: bookingId,
+        );
+
+        debugPrint('Создан чек оплаты: ${receipt.id}');
+      } catch (e) {
+        debugPrint('Ошибка при создании чека оплаты: $e');
+        // Продолжаем выполнение, так как основная операция оплаты уже выполнена
+      }
+
       // Отправляем уведомление владельцу
       await _notificationService.sendBookingPaidNotification(
         booking: updatedBooking,
@@ -1137,6 +1192,40 @@ class BookingService {
 
       // Обновляем статус объекта
       await _updatePropertyStatusAfterPayment(booking.propertyId);
+
+      // Создаем запись о транзакции в коллекции payment_transactions
+      final transactionId = DateTime.now().millisecondsSinceEpoch.toString();
+      await _firestore
+          .collection('payment_transactions')
+          .doc(transactionId)
+          .set({
+            'id': transactionId,
+            'bookingId': bookingId,
+            'userId': booking.userId,
+            'amount': booking.totalPrice,
+            'method': 'card', // По умолчанию используем карту как метод оплаты
+            'status': 'completed',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+      debugPrint('Создана платежная транзакция: $transactionId');
+
+      try {
+        // Получаем сервис платежей для создания чека
+        final paymentService = getIt<PaymentService>();
+
+        // Создаем чек оплаты
+        final receipt = await paymentService.confirmPayment(
+          transactionId: transactionId,
+          bookingId: bookingId,
+        );
+
+        debugPrint('Создан чек оплаты: ${receipt.id}');
+      } catch (e) {
+        debugPrint('Ошибка при создании чека оплаты: $e');
+        // Продолжаем выполнение, так как основная операция оплаты уже выполнена
+      }
 
       await _notificationService.sendBookingPaidNotification(
         booking: updatedBooking,

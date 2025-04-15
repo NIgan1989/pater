@@ -96,13 +96,27 @@ class AppBottomNavigationBar extends StatelessWidget {
         break;
     }
 
+    // Третий элемент зависит от роли (Избранное или Бронирования)
+    if (userRole == UserRole.owner) {
+      items.add(
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.bookmark_border_outlined),
+          activeIcon: Icon(Icons.bookmark),
+          label: 'Брони',
+        ),
+      );
+    } else {
+      items.add(
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.favorite_border_outlined),
+          activeIcon: Icon(Icons.favorite),
+          label: 'Избранное',
+        ),
+      );
+    }
+
     // Общие элементы для всех ролей
     items.addAll([
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.favorite_border_outlined),
-        activeIcon: Icon(Icons.favorite),
-        label: 'Избранное',
-      ),
       const BottomNavigationBarItem(
         icon: Icon(Icons.chat_outlined),
         activeIcon: Icon(Icons.chat),

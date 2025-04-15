@@ -35,24 +35,35 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
   static const int _maxAttempts = 3;
 
   // ignore: unused_field
-  late String _phoneNumber; // сохраняется для возможного использования в будущих обновлениях
+  late String
+  _phoneNumber; // сохраняется для возможного использования в будущих обновлениях
   late bool _setupPin;
   late String _title;
 
   @override
   void initState() {
     super.initState();
-    
+
     // Получаем данные, переданные с предыдущего экрана
-    final Map<String, dynamic>? extra = widget.pinData['extra'] as Map<String, dynamic>?;
+    final Map<String, dynamic>? extra =
+        widget.pinData['extra'] as Map<String, dynamic>?;
     _userId = extra?['userId'] as String? ?? '';
     _phoneNumber = extra?['phoneNumber'] as String? ?? '';
     _setupPin = extra?['setupPin'] as bool? ?? false;
-    
+
     // Устанавливаем заголовок в зависимости от режима
     _title = _setupPin ? 'Установка PIN-кода' : 'Введите PIN-код';
-    
+
     _authService = GetIt.instance<AuthService>();
+
+    debugPrint(
+      'PinAuthScreen: userId=$_userId, setupPin=$_setupPin, phoneNumber=$_phoneNumber',
+    );
+
+    // Если указан флаг setupPin, сохраняем ID пользователя для последующего использования
+    if (_setupPin && _userId.isNotEmpty) {
+      _saveUserId(_userId);
+    }
 
     // Получаем параметры, переданные через конструктор или загружаем из SharedPreferences
     _loadUserInfo();
@@ -80,10 +91,120 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
   /// Загружает информацию о пользователе и попытках входа
   Future<void> _loadUserInfo() async {
     try {
+      // Получаем ID из переданных данных
       _userId = widget.pinData['userId'] ?? '';
 
+      // Получаем номер телефона для поиска пользователя
+      _phoneNumber = widget.pinData['extra']?['phoneNumber'] as String? ?? '';
+
+      debugPrint('Начальный _userId: $_userId, phoneNumber: $_phoneNumber');
+
+      // Если ID пустой, пробуем получить из SharedPreferences
       if (_userId.isEmpty) {
+        debugPrint(
+          'ID пользователя пуст, пробуем получить из SharedPreferences',
+        );
+        final prefs = await SharedPreferences.getInstance();
+        _userId =
+            prefs.getString('user_id') ?? prefs.getString('temp_user_id') ?? '';
+
+        if (_userId.isNotEmpty) {
+          debugPrint('Получен ID пользователя из SharedPreferences: $_userId');
+          // Сохраняем повторно для надежности
+          await prefs.setString('user_id', _userId);
+        }
+      }
+
+      // Если ID все еще пуст и флаг setupPin=true, пытаемся найти пользователя по номеру телефона
+      if (_userId.isEmpty && _phoneNumber.isNotEmpty) {
+        debugPrint(
+          'Пытаемся найти пользователя по номеру телефона: $_phoneNumber',
+        );
+
+        // Нормализуем номер телефона
+        String normalizedPhone = _phoneNumber.replaceAll(
+          RegExp(r'[\s\(\)\-]'),
+          '',
+        );
+        if (normalizedPhone.startsWith('+')) {
+          normalizedPhone = normalizedPhone.substring(1);
+        }
+
+        debugPrint('Нормализованный номер телефона: $normalizedPhone');
+
+        // Поиск пользователя в Firestore
+        try {
+          // Поиск по полю phoneNumber
+          final querySnapshot =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .where('phoneNumber', isEqualTo: normalizedPhone)
+                  .limit(1)
+                  .get();
+
+          if (querySnapshot.docs.isNotEmpty) {
+            _userId = querySnapshot.docs.first.id;
+            debugPrint('Найден ID пользователя в Firestore: $_userId');
+
+            // Сохраняем ID
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('user_id', _userId);
+            await prefs.setString('temp_user_id', _userId);
+            await prefs.setString('last_user_id', _userId);
+          } else {
+            // Альтернативный поиск по phone_number
+            final altQuery =
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .where('phone_number', isEqualTo: normalizedPhone)
+                    .limit(1)
+                    .get();
+
+            if (altQuery.docs.isNotEmpty) {
+              _userId = altQuery.docs.first.id;
+              debugPrint(
+                'Найден ID пользователя в Firestore (альтернативно): $_userId',
+              );
+
+              // Сохраняем ID
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('user_id', _userId);
+              await prefs.setString('temp_user_id', _userId);
+              await prefs.setString('last_user_id', _userId);
+            } else {
+              // Третья попытка - проверка с добавлением кода страны
+              final thirdQuery =
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .where('phoneNumber', isEqualTo: '7$normalizedPhone')
+                      .limit(1)
+                      .get();
+
+              if (thirdQuery.docs.isNotEmpty) {
+                _userId = thirdQuery.docs.first.id;
+                debugPrint('Найден ID пользователя с кодом страны: $_userId');
+
+                // Сохраняем ID
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('user_id', _userId);
+                await prefs.setString('temp_user_id', _userId);
+                await prefs.setString('last_user_id', _userId);
+              } else {
+                debugPrint(
+                  'Пользователь не найден в Firestore по номеру телефона',
+                );
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Ошибка при поиске пользователя в Firestore: $e');
+        }
+      }
+
+      // Если после всех попыток ID все еще пуст и не в режиме установки PIN, возвращаемся на экран авторизации
+      if (_userId.isEmpty && !_setupPin) {
         if (mounted) {
+          debugPrint('ID пользователя не найден, возврат на экран авторизации');
           context.go('/auth');
         }
         return;
@@ -91,78 +212,79 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
 
       // Загружаем данные пользователя из Firestore для гарантии актуальности
       try {
-        final userDoc =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(_userId)
-                .get();
+        if (_userId.isNotEmpty) {
+          final userDoc =
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(_userId)
+                  .get();
 
-        if (!mounted) return;
+          if (!mounted) return;
 
-        if (userDoc.exists) {
-          final userData = userDoc.data()!;
-          final firstName = userData['firstName'] ?? '';
-          final lastName = userData['lastName'] ?? '';
+          if (userDoc.exists) {
+            final userData = userDoc.data()!;
+            final firstName =
+                userData['firstName'] ?? userData['first_name'] ?? '';
+            final lastName =
+                userData['lastName'] ?? userData['last_name'] ?? '';
 
-          _userName = firstName;
-          if (lastName.isNotEmpty) {
-            _userName += ' $lastName';
-          }
+            _userName = firstName;
+            if (lastName.isNotEmpty) {
+              _userName += ' $lastName';
+            }
 
-          // Если имя все еще пустое, используем данные из AccountManager
-          if (_userName.isEmpty) {
+            // Сохраняем данные пользователя для использования в других экранах
             final prefs = await SharedPreferences.getInstance();
-            _userName = prefs.getString('user_display_name') ?? 'Пользователь';
+            await prefs.setString('user_display_name', _userName);
+
+            debugPrint(
+              'Загружены данные пользователя $_userName с ID $_userId',
+            );
           }
-        } else {
-          // Если документ не найден в Firestore, используем имя из SharedPreferences
-          final prefs = await SharedPreferences.getInstance();
-          _userName = prefs.getString('user_display_name') ?? 'Пользователь';
         }
       } catch (e) {
         debugPrint('Ошибка при загрузке данных пользователя из Firestore: $e');
-
-        if (!mounted) return;
-
-        // При ошибке используем данные из SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
-        _userName = prefs.getString('user_display_name') ?? 'Пользователь';
       }
 
       // Загружаем текущее количество попыток входа
       final prefs = await SharedPreferences.getInstance();
       _attempts = prefs.getInt('pin_auth_attempts') ?? 0;
-
-      debugPrint('Пользователь $_userName загружен для авторизации по PIN');
     } catch (e) {
       debugPrint('Ошибка при загрузке данных пользователя: $e');
     }
   }
 
+  // Сохраняем идентификатор пользователя для восстановления сессии
+  Future<void> _saveUserId(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_id', userId);
+      await prefs.setString('temp_user_id', userId);
+      debugPrint('Сохранен ID пользователя: $userId');
+    } catch (e) {
+      debugPrint('Ошибка при сохранении ID пользователя: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: CustomAppBar(
-        title: _title,
-        showBackButton: true,
-      ),
+      appBar: CustomAppBar(title: _title, showBackButton: true),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.lock_outline,
-              size: 70,
-              color: Colors.blue,
-            ),
+            Icon(Icons.lock_outline, size: 70, color: theme.primaryColor),
             const SizedBox(height: 30),
             Text(
-              _setupPin 
-                  ? 'Создайте PIN-код для входа в приложение' 
+              _setupPin
+                  ? 'Создайте PIN-код для входа в приложение'
                   : 'Введите PIN-код для доступа к аккаунту',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16),
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 30),
             PinCodeTextField(
@@ -178,9 +300,9 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
                 activeFillColor: Colors.white,
                 inactiveFillColor: Colors.white,
                 selectedFillColor: Colors.white,
-                activeColor: Colors.blue,
-                inactiveColor: Colors.blue.withAlpha(127),
-                selectedColor: Colors.blue,
+                activeColor: theme.primaryColor,
+                inactiveColor: theme.primaryColor.withAlpha(127),
+                selectedColor: theme.primaryColor,
               ),
               animationDuration: const Duration(milliseconds: 300),
               backgroundColor: Colors.transparent,
@@ -199,14 +321,14 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
             if (_errorMessage != null)
               Text(
                 _errorMessage!,
-                style: TextStyle(color: Colors.red[700]),
+                style: TextStyle(color: theme.colorScheme.error),
                 textAlign: TextAlign.center,
               ),
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
-                backgroundColor: Colors.blue,
+                backgroundColor: theme.primaryColor,
               ),
               onPressed: () {
                 if (_pinController.text.length == 4) {
@@ -219,7 +341,10 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
               },
               child: Text(
                 _setupPin ? 'Установить PIN-код' : 'Войти',
-                style: const TextStyle(fontSize: 16, color: Colors.white),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: theme.colorScheme.onPrimary,
+                ),
               ),
             ),
           ],
@@ -234,12 +359,27 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
     });
 
     try {
+      // Если userId пустой, необходимо его найти перед продолжением
+      if (_userId.isEmpty) {
+        // Перезагружаем данные пользователя для поиска userId
+        await _loadUserInfo();
+
+        if (_userId.isEmpty) {
+          throw Exception(
+            'Невозможно продолжить без идентификатора пользователя',
+          );
+        }
+      }
+
       if (_setupPin) {
         // Режим установки нового PIN-кода
         await _authService.setPin(pin);
-        
+
+        // Устанавливаем флаг авторизации
+        await _forceAuthenticationState(true);
+
         if (!mounted) return;
-        
+
         // Показываем сообщение об успехе
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -247,9 +387,27 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        
+
+        // Делаем небольшую задержку, чтобы изменения состояния успели примениться
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Проверяем, что статус аутентификации установлен правильно
+        final prefs = await SharedPreferences.getInstance();
+        final isAuth = prefs.getBool('is_authenticated') ?? false;
+        debugPrint(
+          'Перед переходом: is_authenticated = $isAuth, userId = $_userId',
+        );
+
+        // Проверяем mounted перед использованием context
+        if (!mounted) return;
+
+        // Принудительно обновляем состояние аутентификации перед переходом
+        await _authService.refreshAuthenticationState();
+
         // Продолжаем авторизацию
-        context.go('/home');
+        if (mounted) {
+          context.go('/home');
+        }
         return;
       }
 
@@ -267,24 +425,75 @@ class _PinAuthScreenState extends State<PinAuthScreen> {
       if (!mounted) return;
 
       if (isValid) {
+        // Устанавливаем флаг авторизации для уверенности
+        await _forceAuthenticationState(true);
+
+        // Делаем небольшую задержку
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Принудительно обновляем состояние аутентификации перед переходом
+        await _authService.refreshAuthenticationState();
+
+        // Проверяем mounted перед использованием context
+        if (!mounted) return;
+
         // Переходим на главный экран
         context.go('/home');
         return;
       } else {
         // Увеличиваем счетчик попыток
         _attempts++;
-        
+
         // Сохраняем количество попыток
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('pin_auth_attempts', _attempts);
-        
+
         setState(() {
-          _errorMessage = 'Неверный PIN-код. Осталось попыток: ${_maxAttempts - _attempts}';
+          _errorMessage =
+              'Неверный PIN-код. Осталось попыток: ${_maxAttempts - _attempts}';
         });
       }
     } catch (e) {
+      // Проверяем mounted перед обновлением состояния
+      if (!mounted) return;
+
       setState(() {
         _errorMessage = 'Ошибка проверки PIN-кода: $e';
+      });
+    }
+  }
+
+  // Принудительно устанавливает состояние авторизации
+  Future<void> _forceAuthenticationState(bool isAuthenticated) async {
+    try {
+      // Используем обновленный метод AuthService для установки состояния авторизации
+      // Этот метод инкапсулирует всю логику работы с идентификатором пользователя
+      bool success = await _authService.forceAuthenticationState(
+        isAuthenticated,
+      );
+
+      // Проверяем результат после асинхронной операции
+      if (!mounted) return;
+
+      if (success) {
+        debugPrint('Состояние авторизации успешно установлено');
+      } else {
+        debugPrint('Ошибка при установке состояния авторизации');
+
+        // Обновляем UI при неудачной установке состояния
+        setState(() {
+          _errorMessage = 'Ошибка при установке состояния авторизации';
+        });
+      }
+    } catch (e) {
+      // Проверяем mounted перед обновлением UI
+      if (!mounted) return;
+
+      debugPrint('Ошибка при установке состояния авторизации: $e');
+
+      // Обновляем UI при ошибке
+      setState(() {
+        _errorMessage = 'Ошибка авторизации: $e';
       });
     }
   }

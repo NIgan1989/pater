@@ -28,7 +28,8 @@
   <!-- Отключить использование reCAPTCHA для Firebase Auth - несколько стратегий -->
   <meta name="firebase-auth-disable-recaptcha" content="true">
   <meta name="firebase-auth-force-recaptcha-disabled" content="true">
-  <!-- Отключение reCAPTCHA через JavaScript будет добавлено в скрипт -->
+  <!-- Принудительное отключение reCAPTCHA -->
+  <meta name="firebase-auth-allow-phone-number-testing" content="true">
 
   <!-- Отключение загрузки reCAPTCHA скриптов -->
   <link rel="prefetch" as="script" href="https://www.gstatic.com/recaptcha/releases/null" />
@@ -54,12 +55,15 @@
 
     // Предоставляем пустой объект recaptcha/grecaptcha для совместимости
     window.recaptcha = window.grecaptcha = {
-      ready: function(callback) { callback(); },
+      ready: function(callback) { setTimeout(callback, 0); },
       execute: function() { return Promise.resolve('disabled-recaptcha-token'); },
       render: function() { return 'dummy-widget-id'; },
       reset: function() { },
       getResponse: function() { return 'disabled-recaptcha-token'; }
     };
+
+    // Глобальный флаг для отключения reCAPTCHA
+    window.firebaseAuthAllowPhoneNumberTesting = true;
   </script>
 
   <!-- iOS meta tags & icons -->

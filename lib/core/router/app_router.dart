@@ -18,6 +18,7 @@ import 'package:pater/presentation/screens/chat/chat_screen.dart';
 import 'package:pater/presentation/screens/payment/payment_screen.dart';
 import 'package:pater/presentation/screens/profile/finances_screen.dart';
 import 'package:pater/presentation/screens/bookings/booking_details_screen.dart';
+import 'package:pater/presentation/screens/bookings/booking_screen.dart';
 import 'package:pater/presentation/screens/property/add_property_screen.dart';
 import 'package:pater/presentation/screens/search/search_screen.dart';
 import 'package:pater/presentation/screens/navigation/shell_screen.dart';
@@ -25,6 +26,7 @@ import 'package:pater/presentation/screens/property/owner_properties_screen.dart
 import 'package:pater/presentation/screens/property/edit_property_screen.dart';
 import 'package:pater/presentation/screens/bookings/owner_bookings_screen.dart';
 import 'package:pater/core/di/service_locator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Экран для отображения ошибок
 class ErrorScreen extends StatelessWidget {
@@ -140,7 +142,16 @@ class AppRouter {
           GoRoute(
             path: 'create-pin',
             name: 'create_pin',
-            builder: (context, state) => const CreatePinScreen(),
+            builder: (context, state) {
+              final Map<String, dynamic> pinData =
+                  state.extra as Map<String, dynamic>? ?? {};
+              final Map<String, dynamic>? extra =
+                  pinData['extra'] as Map<String, dynamic>?;
+              final String userId = extra?['userId'] as String? ?? '';
+              final String phoneNumber = extra?['phoneNumber'] as String? ?? '';
+
+              return CreatePinScreen(userId: userId, phoneNumber: phoneNumber);
+            },
           ),
         ],
       ),
@@ -156,6 +167,15 @@ class AppRouter {
             path: '/home',
             name: 'home',
             builder: (context, state) => const SearchScreen(),
+          ),
+          // Добавляем маршрут для бронирования
+          GoRoute(
+            path: '/booking/:propertyId',
+            name: 'booking',
+            builder: (context, state) {
+              final propertyId = state.pathParameters['propertyId'] ?? '';
+              return BookingScreen(propertyId: propertyId);
+            },
           ),
         ],
       ),
@@ -222,6 +242,13 @@ class AppRouter {
                 },
               ),
             ],
+          ),
+
+          // Маршрут для бронирований владельца
+          GoRoute(
+            path: '/owner-bookings',
+            name: 'owner_bookings',
+            builder: (context, state) => const OwnerBookingsScreen(),
           ),
 
           // Роли клинера: Уборки
@@ -338,11 +365,49 @@ class AppRouter {
     BuildContext context,
     GoRouterState state,
   ) async {
-    final isAuthenticated = _authService.isAuthenticated;
+    // Первым делом обновляем текущее состояние аутентификации в сервисе
+    final authState = await _authService.refreshAuthenticationState();
+
+    // Проверяем флаг аутентификации напрямую через SharedPreferences
+    bool isAuthByPrefs = false;
+    String? userId;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      isAuthByPrefs = prefs.getBool('is_authenticated') ?? false;
+      userId =
+          prefs.getString('user_id') ??
+          prefs.getString('temp_user_id') ??
+          prefs.getString('last_user_id');
+
+      if (isAuthByPrefs && (userId == null || userId.isEmpty)) {
+        // Если флаг установлен, но userId отсутствует, сбрасываем флаг
+        debugPrint(
+          'СБРОС ФЛАГА АВТОРИЗАЦИИ: userId отсутствует при установленном флаге is_authenticated',
+        );
+        isAuthByPrefs = false;
+        await prefs.setBool('is_authenticated', false);
+        await prefs.setBool('force_authenticated', false);
+      }
+    } catch (e) {
+      debugPrint(
+        'Ошибка при проверке состояния аутентификации в SharedPreferences: $e',
+      );
+    }
+
+    // Получаем состояние аутентификации из AuthService (после обновления)
+    final isAuthByService = _authService.isAuthenticated;
+
+    // Используем комбинированный подход - пользователь авторизован, если хоть один из источников подтверждает это
+    // И при этом userId обязательно должен быть доступен
+    final isAuthenticated =
+        (isAuthByPrefs || isAuthByService) &&
+        userId != null &&
+        userId.isNotEmpty;
+
     final location = state.uri.path;
 
     debugPrint(
-      '_redirectLogic: проверка маршрута $location, аутентификация: $isAuthenticated',
+      '_redirectLogic: проверка маршрута $location, аутентификация: $isAuthenticated (prefs: $isAuthByPrefs, service: $isAuthByService, userId: $userId, authState: $authState)',
     );
 
     // Публичные маршруты, доступные без авторизации
@@ -368,7 +433,9 @@ class AppRouter {
       return '/auth';
     }
 
-    debugPrint('_redirectLogic: авторизованный доступ к $location разрешен');
+    debugPrint(
+      '_redirectLogic: авторизованный доступ к $location разрешен (userId: $userId)',
+    );
     return null; // Нет перенаправления, продолжаем навигацию
   }
 }
