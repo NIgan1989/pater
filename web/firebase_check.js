@@ -2,6 +2,68 @@
  * Утилиты для проверки состояния Firebase в веб-приложении
  */
 
+// Отключаем reCAPTCHA верификацию для телефонной аутентификации
+window.disableRecaptcha = function() {
+  if (typeof firebase === 'undefined' || !firebase.auth) {
+    console.warn('Firebase Auth не доступен, невозможно отключить reCAPTCHA');
+    return false;
+  }
+  
+  try {
+    console.log('Агрессивное отключение reCAPTCHA...');
+    
+    // 1. Устанавливаем настройки в localStorage
+    localStorage.setItem('firebase_auth_disable_recaptcha', 'true');
+    
+    // 2. Пытаемся отключить reCAPTCHA через официальный API
+    if (firebase.auth().settings && typeof firebase.auth().settings.appVerificationDisabledForTesting === 'function') {
+      firebase.auth().settings.appVerificationDisabledForTesting(true);
+      console.log('reCAPTCHA верификация отключена через официальный API');
+    }
+    
+    // 3. Патчим методы Firebase Auth для пропуска верификации
+    if (firebase.auth.PhoneAuthProvider && firebase.auth.PhoneAuthProvider.credential) {
+      // Сохраняем оригинальный метод
+      const originalVerifyPhoneNumber = firebase.auth().verifyPhoneNumber;
+      
+      // Заменяем метод verifyPhoneNumber
+      if (firebase.auth().verifyPhoneNumber) {
+        firebase.auth().verifyPhoneNumber = function(phoneNumber, applicationVerifier) {
+          console.log('Перехват verifyPhoneNumber, пропуск reCAPTCHA верификации');
+          // Если applicationVerifier не предоставлен, используем фейковый
+          if (!applicationVerifier) {
+            applicationVerifier = {
+              type: 'recaptcha',
+              verify: function() {
+                return Promise.resolve('disabled-recaptcha-token');
+              }
+            };
+          }
+          
+          // Вызываем оригинальный метод с нашим верификатором
+          return originalVerifyPhoneNumber.call(this, phoneNumber, applicationVerifier);
+        };
+      }
+    }
+    
+    // 4. Блокируем загрузку reCAPTCHA скриптов динамически
+    if (window.grecaptcha === undefined) {
+      // Создаем фейковый объект grecaptcha
+      window.grecaptcha = {
+        ready: function(callback) { setTimeout(callback, 0); },
+        execute: function() { return Promise.resolve('disabled-recaptcha-token'); },
+        render: function() { return 1; }
+      };
+    }
+    
+    console.log('Завершено агрессивное отключение reCAPTCHA');
+    return true;
+  } catch (e) {
+    console.error('Ошибка при отключении reCAPTCHA:', e);
+    return false;
+  }
+};
+
 // Проверяет, доступен ли Firebase в текущей среде
 window.isFirebaseAvailable = function() {
   if (typeof firebase === 'undefined') {

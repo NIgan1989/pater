@@ -317,6 +317,8 @@ class AuthService extends ChangeNotifier {
           _prefs.setString('verificationId', verificationId);
         },
         timeout: const Duration(seconds: 60),
+        // Указываем forceResendingToken: null
+        forceResendingToken: null,
       );
 
       // Сообщаем, что верификация началась и пользователь должен ввести код из СМС
@@ -486,6 +488,9 @@ class AuthService extends ChangeNotifier {
       await _prefs.remove('verificationId');
       await _prefs.remove('phoneNumberForAuth');
 
+      // Устанавливаем флаг для верификации по телефону
+      await _prefs.setBool('verified_by_phone', true);
+      
       // Уведомляем слушателей об изменении состояния
       notifyListeners();
 

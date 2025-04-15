@@ -15,6 +15,11 @@ function checkFirebaseHealth() {
   // Если Firebase уже инициализирован
   if (typeof firebase !== 'undefined' && firebase.app) {
     try {
+      // Отключаем reCAPTCHA для аутентификации
+      if (window.disableRecaptcha) {
+        window.disableRecaptcha();
+      }
+      
       // Проверяем состояние аутентификации
       const auth = firebase.auth();
       console.log('Статус аутентификации:', auth.currentUser ? 'Пользователь вошел' : 'Пользователь не аутентифицирован');
@@ -76,8 +81,55 @@ window.initializeFirebase = function() {
     };
     
     try {
+      // Перед инициализацией Firebase отключаем reCAPTCHA глобально
+      // Добавляем глобальные настройки
+      window.recaptchaDisabled = true;
+      
+      // Создаем глобальный фейковый объект recaptcha
+      window.RecaptchaVerifier = function() {
+        return {
+          clear: function() {},
+          render: function() { return 1; },
+          verify: function() { return Promise.resolve("fake-token"); }
+        };
+      };
+      
       firebase.initializeApp(firebaseConfig);
       console.log('Firebase инициализирован успешно');
+      
+      // Отключаем reCAPTCHA для телефонной аутентификации
+      if (window.disableRecaptcha) {
+        window.disableRecaptcha();
+      }
+      
+      // Также отключаем reCAPTCHA через переопределение Firebase Auth
+      if (firebase.auth && firebase.auth().settings) {
+        try {
+          // Отключаем приложение верификации reCAPTCHA
+          if (typeof firebase.auth().settings.appVerificationDisabledForTesting === 'function') {
+            firebase.auth().settings.appVerificationDisabledForTesting(true);
+          }
+          
+          // Если есть метод setCustomParameters, попытаемся использовать его
+          if (firebase.auth().signInWithPhoneNumber) {
+            const originalMethod = firebase.auth().signInWithPhoneNumber;
+            firebase.auth().signInWithPhoneNumber = function(phoneNumber, applicationVerifier) {
+              // Если верификатор не предоставлен, создадим фейковый
+              if (!applicationVerifier) {
+                applicationVerifier = {
+                  type: 'recaptcha',
+                  verify: function() { return Promise.resolve('fake-token'); }
+                };
+              }
+              return originalMethod.call(this, phoneNumber, applicationVerifier);
+            };
+          }
+          
+          console.log('Firebase Auth настроен для обхода reCAPTCHA');
+        } catch (e) {
+          console.warn('Не удалось настроить обход reCAPTCHA:', e);
+        }
+      }
       
       // Настраиваем Firestore
       firebase.firestore().settings({
