@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pater/core/auth/auth_service.dart';
 import 'package:pater/core/di/service_locator.dart';
 import 'package:pater/data/services/booking_service.dart';
@@ -16,7 +17,6 @@ import 'dart:async';
 import 'package:pater/domain/entities/user.dart';
 import 'package:pater/presentation/widgets/bookings/universal_booking_card.dart';
 import 'package:pater/domain/entities/user_role.dart';
-import 'package:pater/domain/repositories/user_repository.dart';
 
 /// Экран управления бронированиями для владельца.
 /// Позволяет просматривать список бронирований и управлять ими.
@@ -49,7 +49,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     with TickerProviderStateMixin {
   final PropertyService _propertyService = PropertyService();
   final BookingService _bookingService = BookingService();
-  AuthService? _authService; // Changed from late final to nullable
+  late final AuthService _authService;
 
   /// Контроллер табов
   late TabController _tabController;
@@ -72,34 +72,14 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
   /// Список клиентов для бронирований
   final Map<String, User> _bookingClients = {};
 
-  /// UserService для работы с данными пользователей
-  late final UserRepository _userService;
-
   @override
   void initState() {
     super.initState();
-
-    // Инициализируем контроллер табов
-    _tabController = TabController(length: 2, vsync: this);
-
-    try {
-      // Получаем сервисы через GetIt
-      _authService = getIt<AuthService>();
-      _userService = getIt<UserRepository>();
-      debugPrint('Сервисы инициализированы успешно');
-    } catch (e) {
-      debugPrint('Ошибка при получении сервисов: $e');
-      // В случае ошибки показываем сообщение пользователю
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Ошибка инициализации: $e';
-          });
-        }
-      });
-    }
-
-    // Загружаем данные
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+    ); // 3 вкладки вместо 4
+    _authService = getIt<AuthService>();
     _loadData();
   }
 
@@ -109,7 +89,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     super.dispose();
   }
 
-  /// Загрузка всех необходимых данных
+  /// Загружает данные объектов и бронирований
   Future<void> _loadData() async {
     if (!mounted) return;
 
@@ -119,73 +99,38 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     });
 
     try {
-      // Проверяем, инициализирован ли AuthService
-      if (_authService == null) {
-        debugPrint('AuthService не инициализирован');
-        throw Exception('Сервис авторизации не доступен');
-      }
+      // Получаем текущего пользователя
+      final currentUser = _authService.currentUser;
 
-      // Проверяем, авторизован ли пользователь
-      if (_authService!.currentUser == null ||
-          _authService!.currentUser!.id.isEmpty) {
-        debugPrint('Пользователь не авторизован');
-        throw Exception('Пользователь не авторизован');
-      }
+      // Если пользователь не авторизован, пробуем восстановить сессию
+      if (currentUser == null) {
+        debugPrint(
+          'Пользователь не авторизован, пробуем восстановить сессию...',
+        );
 
-      // Загружаем объекты недвижимости владельца
-      await _loadOwnerProperties();
+        // Пробуем восстановить сессию через лист ID
+        final prefs = await SharedPreferences.getInstance();
+        final lastUserId = prefs.getString('last_user_id');
 
-      // Загружаем бронирования владельца
-      await _loadOwnerBookings();
-    } catch (e) {
-      debugPrint('Ошибка при загрузке данных: $e');
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Ошибка при загрузке данных: $e';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
+        if (lastUserId != null && lastUserId.isNotEmpty) {
+          // Восстанавливаем сессию используя ID последнего пользователя
+          final success = await _authService.restoreUserSessionById(lastUserId);
 
-  /// Загружает данные объектов недвижимости пользователя
-  Future<void> _loadOwnerProperties() async {
-    try {
-      if (_authService == null) return;
+          if (!success) {
+            throw Exception('Не удалось восстановить сессию пользователя');
+          }
+
+          debugPrint('Сессия восстановлена для пользователя: $lastUserId');
+        } else {
+          throw Exception('Нет сохраненной сессии для восстановления');
+        }
+      }
 
       // Загружаем объекты пользователя
       final properties = await _propertyService.getUserProperties();
 
-      // Обновляем состояние
-      if (mounted) {
-        setState(() {
-          _properties = properties.fold(
-            {},
-            (map, property) => map..[property.id] = property,
-          );
-        });
-      }
-    } catch (e) {
-      debugPrint('Ошибка при получении объектов владельца: $e');
-      throw Exception('Ошибка при получении объектов владельца: $e');
-    }
-  }
-
-  /// Загружает данные бронирований пользователя
-  Future<void> _loadOwnerBookings() async {
-    try {
-      if (_authService == null) return;
-
       // Загружаем бронирования пользователя
       final bookings = await _bookingService.getOwnerBookings();
-
-      // Загружаем информацию о клиентах
-      await _loadBookingClients(bookings);
 
       // Сгруппируем бронирования по ID объекта
       final Map<String, List<Booking>> bookingsByProperty = {};
@@ -197,76 +142,92 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       }
 
       // Обновляем хранилище бронирований
+      _propertyBookings = bookingsByProperty;
+
+      // Создаем список объектов с их бронированиями
+      final List<PropertyWithBookings> propertiesWithBookings = [];
+      for (final property in properties) {
+        propertiesWithBookings.add(
+          PropertyWithBookings(
+            property: property,
+            bookings: bookingsByProperty[property.id] ?? [],
+          ),
+        );
+      }
+
+      // Обновляем состояние
       if (mounted) {
         setState(() {
-          _propertyBookings = bookingsByProperty;
+          _properties = propertiesWithBookings.fold(
+            {},
+            (map, propertyWithBookings) =>
+                map..[propertyWithBookings.id] = propertyWithBookings.property,
+          );
+          _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Ошибка при получении бронирований владельца: $e');
-      throw Exception('Ошибка при получении бронирований владельца: $e');
-    }
-  }
-
-  /// Загружает информацию о клиентах для бронирований
-  Future<void> _loadBookingClients(List<Booking> bookings) async {
-    try {
-      // Получаем уникальные ID клиентов
-      final clientIds = bookings.map((booking) => booking.clientId).toSet();
-
-      // Загружаем информацию о клиентах
-      for (final clientId in clientIds) {
-        if (clientId.isNotEmpty && !_bookingClients.containsKey(clientId)) {
-          try {
-            final user = await _userService.getUserById(clientId);
-            if (user != null) {
-              setState(() {
-                _bookingClients[clientId] = user;
-              });
-            }
-          } catch (e) {
-            debugPrint(
-              'Ошибка при загрузке информации о клиенте $clientId: $e',
-            );
-          }
-        }
+      debugPrint('Ошибка при загрузке данных: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Ошибка при загрузке данных: $e';
+          _isLoading = false;
+        });
       }
-    } catch (e) {
-      debugPrint('Ошибка при загрузке информации о клиентах: $e');
     }
   }
 
-  /// Обрабатывает подтверждение бронирования
+  /// Показывает снэкбар с сообщением
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Подтверждает бронирование
   Future<void> _confirmBooking(Booking booking) async {
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
     try {
-      // Подтверждаем бронирование
-      await _bookingService.confirmBooking(booking.id);
+      setState(() {
+        _isLoading = true;
+      });
 
-      // Показываем сообщение об успехе
-      if (mounted) {
-        _showSnackBar('Бронирование подтверждено успешно');
-      }
+      // Правильная сигнатура метода confirmBooking - он принимает только ID бронирования
+      final result = await _bookingService.confirmBooking(booking.id);
 
-      // Перезагружаем данные
-      await _loadData();
-    } catch (e) {
-      debugPrint('Ошибка при подтверждении бронирования: $e');
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Ошибка при подтверждении бронирования: $e';
-        });
-      }
-    } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
+
+        if (result) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Бронирование подтверждено'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Обновляем список бронирований
+          _loadData();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка при подтверждении бронирования'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -575,18 +536,12 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
   /// Навигация к деталям бронирования
   void _navigateToBookingDetails(String bookingId) {
-    context.pushNamed(
-      'booking_details',
-      pathParameters: {'bookingId': bookingId},
-    );
+    context.pushNamed('booking_details', pathParameters: {'id': bookingId});
   }
 
   /// Навигация к редактированию объекта
   void _navigateToEditProperty(String propertyId) {
-    context.pushNamed(
-      'edit_property',
-      pathParameters: {'propertyId': propertyId},
-    );
+    context.pushNamed('edit_property', pathParameters: {'id': propertyId});
   }
 
   @override
@@ -601,6 +556,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           tabs: const [
             Tab(icon: Icon(Icons.pending_actions_outlined)),
             Tab(icon: Icon(Icons.event_available_outlined)),
+            Tab(icon: Icon(Icons.cleaning_services_outlined)),
           ],
           labelColor: Theme.of(context).colorScheme.primary,
           unselectedLabelColor: Theme.of(
@@ -677,6 +633,17 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
             : _buildPropertiesListView(
               BookingFilterType.booked,
               bookedProperties,
+            ),
+
+        // Вкладка "Уборка" - объекты в статусе уборки
+        cleaningProperties.isEmpty
+            ? _buildEmptyTabView(
+              'У вас пока нет объектов в статусе уборки',
+              icon: Icons.cleaning_services_outlined,
+            )
+            : _buildPropertiesListView(
+              BookingFilterType.cleaning,
+              cleaningProperties,
             ),
       ],
     );
@@ -1093,13 +1060,6 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           }
         },
       ),
-    );
-  }
-
-  /// Показывает всплывающее сообщение
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
     );
   }
 }
