@@ -238,7 +238,9 @@ class AppRouter {
                 path: ':propertyId/bookings',
                 name: 'owner_property_bookings',
                 builder: (context, state) {
-                  return const OwnerBookingsScreen();
+                  final propertyId = state.pathParameters['propertyId'];
+                  // Передаем propertyId в OwnerBookingsScreen для фильтрации бронирований по этому объекту
+                  return OwnerBookingsScreen(propertyId: propertyId);
                 },
               ),
             ],
@@ -248,7 +250,9 @@ class AppRouter {
           GoRoute(
             path: '/owner-bookings',
             name: 'owner_bookings',
-            builder: (context, state) => const OwnerBookingsScreen(),
+            builder:
+                (context, state) =>
+                    const OwnerBookingsScreen(), // без фильтрации по объекту
           ),
 
           // Роли клинера: Уборки

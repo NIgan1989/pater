@@ -21,7 +21,10 @@ import 'package:pater/domain/entities/user_role.dart';
 /// Экран управления бронированиями для владельца.
 /// Позволяет просматривать список бронирований и управлять ими.
 class OwnerBookingsScreen extends StatefulWidget {
-  const OwnerBookingsScreen({super.key});
+  /// ID объекта для фильтрации бронирований (опционально)
+  final String? propertyId;
+
+  const OwnerBookingsScreen({super.key, this.propertyId});
 
   @override
   State<OwnerBookingsScreen> createState() => _OwnerBookingsScreenState();
@@ -49,7 +52,7 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     with TickerProviderStateMixin {
   final PropertyService _propertyService = PropertyService();
   final BookingService _bookingService = BookingService();
-  late final AuthService _authService;
+  AuthService? _authService; // Изменено с late final на nullable
 
   /// Контроллер табов
   late TabController _tabController;
@@ -76,10 +79,26 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 3,
+      length: 2, // 2 вкладки: Активные и Брони
       vsync: this,
-    ); // 3 вкладки вместо 4
-    _authService = getIt<AuthService>();
+    );
+
+    try {
+      _authService = getIt<AuthService>();
+      debugPrint('AuthService успешно инициализирован в OwnerBookingsScreen');
+    } catch (e) {
+      debugPrint(
+        'Ошибка при инициализации AuthService в OwnerBookingsScreen: $e',
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Ошибка инициализации: $e';
+          });
+        }
+      });
+    }
+
     _loadData();
   }
 
@@ -99,8 +118,13 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     });
 
     try {
+      // Проверяем, инициализирован ли AuthService
+      if (_authService == null) {
+        throw Exception('Сервис авторизации не доступен');
+      }
+
       // Получаем текущего пользователя
-      final currentUser = _authService.currentUser;
+      final currentUser = _authService!.currentUser;
 
       // Если пользователь не авторизован, пробуем восстановить сессию
       if (currentUser == null) {
@@ -114,7 +138,9 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
 
         if (lastUserId != null && lastUserId.isNotEmpty) {
           // Восстанавливаем сессию используя ID последнего пользователя
-          final success = await _authService.restoreUserSessionById(lastUserId);
+          final success = await _authService!.restoreUserSessionById(
+            lastUserId,
+          );
 
           if (!success) {
             throw Exception('Не удалось восстановить сессию пользователя');
@@ -132,9 +158,19 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
       // Загружаем бронирования пользователя
       final bookings = await _bookingService.getOwnerBookings();
 
+      // Если указан propertyId для фильтрации, фильтруем бронирования только для этого объекта
+      List<Booking> filteredBookings = bookings;
+      if (widget.propertyId != null) {
+        filteredBookings =
+            bookings.where((b) => b.propertyId == widget.propertyId).toList();
+        debugPrint(
+          'Фильтрация бронирований для объекта: ${widget.propertyId}, найдено: ${filteredBookings.length}',
+        );
+      }
+
       // Сгруппируем бронирования по ID объекта
       final Map<String, List<Booking>> bookingsByProperty = {};
-      for (final booking in bookings) {
+      for (final booking in filteredBookings) {
         if (!bookingsByProperty.containsKey(booking.propertyId)) {
           bookingsByProperty[booking.propertyId] = [];
         }
